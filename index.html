@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TargetMind</title>
+<meta name="description" content="Entrenamiento de tiro con arma láser: checklist de seguridad, generador de blancos vectoriales y cámara con auto-lock/homografía.">
+<meta name="theme-color" content="#101216">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <h1>TargetMind</h1>
+        <span>Entrenamiento con arma láser &mdash; app web</span>
+      </div>
+    </div>
+    <div class="system-status">
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.10</span>
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">SAFETY GATE: LOCKED</span>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="safety"><span class="n">01</span> Seguridad</button>
+    <button class="tab-btn" data-tab="target" disabled><span class="n">02</span> Generador de Blanco</button>
+    <button class="tab-btn" data-tab="dry" disabled><span class="n">03</span> Fuego Seco</button>
+    <button class="tab-btn" data-tab="live" disabled><span class="n">04</span> Fuego Real</button>
+    <button class="tab-btn" data-tab="log" disabled><span class="n">05</span> Registro</button>
+  </div>
+
+  <!-- ========================= PANEL 1: SAFETY ========================= -->
+  <div class="panel active" id="panel-safety">
+    <div class="card">
+      <h2>Safety Gate &mdash; antes de empezar</h2>
+      <p class="sub">El checklist depende de qué vas a practicar: no tiene sentido "certificar" que no hay munición real si vas a tirar con munición real. Elegí primero, y el sistema permanece en <code class="inline">SafetyState.LOCKED</code> hasta completar los 4 pasos correspondientes, en orden, cada uno con un gesto de deslizar.</p>
+
+      <div id="safetyModePicker">
+        <div class="mode-options">
+          <button class="mode-option" id="modeDryBtn" data-mode="DRY">
+            <span class="mode-icon">🔴</span>
+            <span class="mode-title">Fuego seco</span>
+            <span class="mode-desc">Cartucho láser, sin munición real. Checklist de armado seguro del entrenador.</span>
+          </button>
+          <button class="mode-option" id="modeLiveBtn" data-mode="LIVE">
+            <span class="mode-icon">🎯</span>
+            <span class="mode-title">Fuego real</span>
+            <span class="mode-desc">Munición viva en el polígono. Recordatorio de las 4 reglas universales + protección.</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="safetyChecklistWrap" style="display:none;">
+        <div class="btn-row" style="margin-bottom:14px;">
+          <span class="pill accent" id="safetyModeLabel"></span>
+          <button class="btn btn-ghost" id="btnChangeMode" style="margin-left:auto;">Cambiar</button>
+        </div>
+
+        <div class="safety-progress" id="safetyProgress"></div>
+
+        <div class="safety-steps" id="safetyStepsDry" style="display:none;">
+          <div class="safety-step" data-step="0">
+            <div class="head"><div class="idx">1</div><h3>Sin munición real</h3></div>
+            <p>Certifico que no hay munición viva, cargadores cargados ni cartuchos reales en la sala de práctica.</p>
+            <div class="slider-track" data-idx="0">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+          <div class="safety-step locked" data-step="1">
+            <div class="head"><div class="idx">2</div><h3>Arma descargada</h3></div>
+            <p>Certifico que retiré el cargador, trabé la corredera hacia atrás e inspeccioné física y visualmente la recámara: el arma está vacía.</p>
+            <div class="slider-track locked" data-idx="1">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+          <div class="safety-step locked" data-step="2">
+            <div class="head"><div class="idx">3</div><h3>Cartucho láser insertado</h3></div>
+            <p>Certifico que cargué de forma segura el cartucho de entrenamiento láser y volví a armar el arma.</p>
+            <div class="slider-track locked" data-idx="2">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+          <div class="safety-step locked" data-step="3">
+            <div class="head"><div class="idx">4</div><h3>Dirección segura</h3></div>
+            <p>Certifico que el arma sólo apuntará en una dirección segura, hacia el blanco en la pared.</p>
+            <div class="slider-track locked" data-idx="3">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="safety-steps" id="safetyStepsLive" style="display:none;">
+          <div class="safety-step" data-step="0">
+            <div class="head"><div class="idx">1</div><h3>Toda arma está cargada</h3></div>
+            <p>Trato cualquier arma de fuego como si estuviera cargada en todo momento, incluso si ya la revisé.</p>
+            <div class="slider-track" data-idx="0">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+          <div class="safety-step locked" data-step="1">
+            <div class="head"><div class="idx">2</div><h3>Dirección segura siempre</h3></div>
+            <p>El cañón nunca apunta a una persona ni a nada que no esté dispuesto a destruir, ni siquiera al cargar o descargar.</p>
+            <div class="slider-track locked" data-idx="1">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+          <div class="safety-step locked" data-step="2">
+            <div class="head"><div class="idx">3</div><h3>Dedo fuera del gatillo</h3></div>
+            <p>Mantengo el dedo fuera del disparador y del guardamonte hasta tener la mira sobre el blanco y estar listo para disparar.</p>
+            <div class="slider-track locked" data-idx="2">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+          <div class="safety-step locked" data-step="3">
+            <div class="head"><div class="idx">4</div><h3>Protección y reglas del polígono</h3></div>
+            <p>Uso protección auditiva y visual en todo momento, conozco mi blanco y qué hay detrás, y respeto las reglas específicas de mi polígono.</p>
+            <div class="slider-track locked" data-idx="3">
+              <div class="slider-fill"></div><div class="slider-label">Deslizar para confirmar &rarr;</div><div class="slider-thumb">→</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="gate-banner">
+          <span class="dot" id="gateDot"></span>
+          <div>
+            <div class="state" id="gateState">0 / 4 pasos completados — SafetyState.LOCKED</div>
+            <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">El botón "Iniciar sesión" permanece deshabilitado hasta completar todo.</div>
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn btn-accent" id="btnArm" disabled>Iniciar sesión &mdash; SafetyState.ARMED</button>
+          <button class="btn btn-ghost" id="btnResetSafety">Reiniciar checklist</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= PANEL 2: TARGET GENERATOR ========================= -->
+  <div class="panel" id="panel-target">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Generador de blanco vectorial</h2>
+        <p class="sub">Define el papel y el modo. Calcula el área segura (margen de 10&nbsp;mm), coloca los 4 anclajes fiduciales y el metatag óptico. El PDF exportado es vectorial a escala real.</p>
+
+        <div class="field">
+          <label class="field-label">Tamaño de papel</label>
+          <select id="pageSize">
+            <option value="A4">A4 — área segura 190 × 277 mm</option>
+            <option value="A3">A3 — área segura 277 × 400 mm</option>
+            <option value="OFICIO">Oficio/Legal — área segura 195.9 × 335.6 mm</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Modo</label>
+          <select id="pageMode">
+            <option value="DRY">Fuego seco (distancia simulada)</option>
+            <option value="LIVE">Fuego real (escala 1:1)</option>
+          </select>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label class="field-label">Distancia física diseñada (m)</label>
+            <input type="number" id="distDesigned" value="3" min="1" max="25" step="0.5">
+          </div>
+          <div class="field" id="distSimWrap">
+            <label class="field-label">Distancia simulada (m)</label>
+            <input type="number" id="distSimulated" value="15" min="3" max="50" step="1">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Cantidad de figuras</label>
+          <input type="number" id="shapeCount" value="7" min="3" max="12" step="1">
+          <p class="sub">Las figuras miden 5-8cm (pensado para reacción rápida, no precisión). Con ese tamaño puede que no entren todas las que pidas sin superponerse — si eso pasa, el blanco se genera igual con las que sí entraron.</p>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-accent" id="btnGenerate">Generar blanco</button>
+          <button class="btn btn-ghost" id="btnReroll">Re-tirar figuras</button>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-ghost" id="btnSaveTarget" disabled>💾 Guardar blanco</button>
+        </div>
+
+        <div class="legend">
+          <div class="item"><span class="swatch" style="background:#e5484d;"></span>Rojo</div>
+          <div class="item"><span class="swatch" style="background:#4a9fe0;"></span>Azul</div>
+          <div class="item"><span class="swatch" style="background:#f4c430;"></span>Amarillo</div>
+          <div class="item"><span class="swatch" style="background:#45b26b;"></span>Verde</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Vista previa de impresión</h2>
+        <p class="sub" id="targetMeta">Sin generar todavía.</p>
+        <div class="preview-wrap"><canvas id="previewCanvas" width="380" height="380"></canvas></div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn btn-accent" id="btnExportPdf" disabled>⬇ Descargar PDF para imprimir</button>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-accent" id="btnSendDry" disabled>Enviar a Fuego Seco →</button>
+          <button class="btn btn-accent" id="btnSendLive" disabled>Enviar a Fuego Real →</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Blancos guardados</h2>
+      <p class="sub">Guardá un blanco para reusarlo después sin tener que generar (ni re-imprimir) uno nuevo — útil si ya tenés hojas impresas de una sesión anterior y querés que las figuras coincidan exactamente. Desde esta versión, exportar el PDF (o mandar el blanco a Fuego Seco/Real) ya lo guarda automáticamente acá.</p>
+      <div class="btn-row" style="margin-bottom:10px;">
+        <input type="text" id="savedTargetSearch" placeholder="Buscar por ID (el número impreso en el blanco) o nombre…" style="flex:1;min-width:180px;">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nombre</th><th>Papel</th><th>Modo</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="savedTargetsBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top:12px;">
+        <button class="btn btn-ghost" id="btnExportLibrary">⬇ Exportar biblioteca (backup .json)</button>
+        <button class="btn btn-ghost" id="btnImportLibrary">⬆ Importar biblioteca (.json)</button>
+        <input type="file" id="importLibraryFile" accept="application/json" style="display:none;">
+      </div>
+      <p class="sub" style="margin-top:8px;">Los blancos guardados viven en este navegador/dispositivo. Actualizar la app NO los borra, pero cambiar de celular, reinstalar, o borrar datos del sitio sí — exportá este backup de vez en cuando y guardalo (o pasalo al nuevo dispositivo) para no perderlos.</p>
+      <div class="table-wrap" id="savedTargetJsonWrap" style="display:none; margin-top:14px;">
+        <label class="field-label">JSON guardado para "<span id="savedTargetJsonName"></span>" — esto es lo que la app usa al escanear este blanco</label>
+        <pre class="mono" id="savedTargetJson" style="margin:0; font-size:12px; color:var(--text-dim); white-space:pre-wrap;"></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>JSON del blanco (Target Metatag decodificado)</h2>
+      <p class="sub">Lo que el motor de visión extrae del metatag y usa para cargar el mapa de zonas.</p>
+      <div class="table-wrap"><pre class="mono" id="targetJson" style="margin:0; font-size:12px; color:var(--text-dim); white-space:pre-wrap;">// generá un blanco para ver el JSON</pre></div>
+    </div>
+  </div>
+
+  <!-- ========================= PANEL 3: DRY FIRE ========================= -->
+  <div class="panel" id="panel-dry">
+    <div class="banner-info">
+      <span>ℹ️</span>
+      <div><b>Cámara real.</b> Necesita HTTPS (o <code class="inline">localhost</code>) y permiso de cámara. Imprimí el PDF del blanco, apuntá la cámara al papel completo y tocá "Activar cámara". Si la detección de láser no engancha bien en tu dispositivo (luz/lente/cartucho), podés tocar directamente sobre el video ya bloqueado para simular el disparo — el drill funciona igual.</div>
+    </div>
+    <div class="sim-layout">
+      <div class="scope" id="dryScopeWrap">
+        <div class="empty-hint" id="dryEmpty">
+          <span class="big">◎</span>
+          Generá un blanco en la pestaña <b>Generador de Blanco</b> y enviálo acá para activar la cámara.
+        </div>
+      </div>
+      <div class="side-card" id="drySide" style="display:none;">
+        <button class="btn btn-accent" id="btnLock">Activar cámara</button>
+
+        <div>
+          <label class="field-label">Color de láser</label>
+          <div class="toggle-row">
+            <button class="toggle-btn active" data-color="red">Rojo</button>
+            <button class="toggle-btn" data-color="green">Verde</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label">Rondas del drill</label>
+          <input type="number" id="drillRounds" value="8" min="3" max="20">
+        </div>
+
+        <div>
+          <label class="field-label">Nivel de dificultad</label>
+          <div class="toggle-row">
+            <button class="toggle-btn difficulty-btn active" data-difficulty="1">1</button>
+            <button class="toggle-btn difficulty-btn" data-difficulty="2">2</button>
+            <button class="toggle-btn difficulty-btn" data-difficulty="3">3</button>
+            <button class="toggle-btn difficulty-btn" data-difficulty="4">4</button>
+          </div>
+          <p class="difficulty-desc" id="difficultyDesc"></p>
+        </div>
+
+        <div>
+          <label class="field-label">
+            <input type="checkbox" id="audioCuesToggle" checked style="vertical-align:middle; margin-right:6px;">
+            Señales de audio (voz + pitido)
+          </label>
+        </div>
+        <div id="cueOrderWrap">
+          <label class="field-label">Orden de la señal</label>
+          <div class="toggle-row">
+            <button class="toggle-btn cue-order-btn active" data-cue-order="nameFirst">Nombre → Pitido</button>
+            <button class="toggle-btn cue-order-btn" data-cue-order="beepFirst">Pitido → Nombre</button>
+          </div>
+          <p class="sub" style="margin-top:6px;">
+            "Nombre → Pitido": te dice a qué disparar, y el pitido es la señal de arrancar (el tiempo de reacción se mide desde el pitido).
+            "Pitido → Nombre": el pitido avisa que ya viene el objetivo, y el tiempo se mide desde que termina de decírtelo — recién ahí sabés a qué tirar.
+          </p>
+        </div>
+
+        <button class="btn btn-accent" id="btnStartDrill" disabled>▶ Iniciar Drill Mente-Acción</button>
+        <button class="btn btn-ghost" id="btnStopDrill" style="display:none;">■ Detener drill</button>
+
+        <div class="stat-row"><span>Ronda</span><span class="v" id="statRound">0 / 0</span></div>
+        <div class="stat-row"><span>Aciertos</span><span class="v success-txt" id="statHits">0</span></div>
+        <div class="stat-row"><span>Fallos</span><span class="v danger-txt" id="statMiss">0</span></div>
+        <div class="stat-row"><span>Tiempo reacción prom.</span><span class="v" id="statAvgRt">&mdash;</span></div>
+
+        <div>
+          <label class="field-label">Registro de la sesión</label>
+          <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+            <table><thead><tr><th>#</th><th>Prompt</th><th>RT</th><th>Res.</th><th>Detalle</th></tr></thead><tbody id="drillLogBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= PANEL 4: LIVE FIRE ========================= -->
+  <div class="panel" id="panel-live">
+    <div class="banner-warn">
+      <span>⚠️</span>
+      <div><b>Fuego real.</b> Esta pantalla es sólo para registrar y medir agrupamientos en el rango. No reemplaza ninguna práctica de seguridad del polígono. Verificá siempre las reglas de tu rango.</div>
+    </div>
+    <div class="sim-layout">
+      <div class="scope" id="liveScopeWrap">
+        <div class="empty-hint" id="liveEmpty">
+          <span class="big">▦</span>
+          Generá un blanco en modo <b>Fuego real</b> y enviálo acá.
+        </div>
+      </div>
+      <div class="side-card" id="liveSide" style="display:none;">
+        <button class="btn btn-accent" id="btnLiveCamera">Activar cámara</button>
+        <div class="field" style="margin-bottom:0;">
+          <label class="field-label">Distancia física (m)</label>
+          <input type="number" id="liveDistance" value="15" min="1" max="200" step="0.5">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-accent" id="btnStartGroup">Iniciar grupo (fijar referencia)</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="btnNewGroup">Nuevo grupo (virtual patching)</button>
+        </div>
+        <div class="stat-row"><span>Impactos</span><span class="v" id="statShots">0</span></div>
+        <div class="stat-row"><span>Dispersión extrema</span><span class="v" id="statSpread">&mdash;</span></div>
+        <div class="stat-row"><span>Punto medio de impacto</span><span class="v" id="statMpi">&mdash;</span></div>
+        <div class="stat-row"><span>Agrupamiento (MOA)</span><span class="v" id="statMoa">&mdash;</span></div>
+
+        <div>
+          <label class="field-label">Historial de grupos</label>
+          <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+            <table><thead><tr><th>#</th><th>Dist.</th><th>Tiros</th><th>MOA</th></tr></thead><tbody id="liveLogBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= PANEL 5: LOG ========================= -->
+  <div class="panel" id="panel-log">
+    <div class="card">
+      <h2>Registro histórico</h2>
+      <p class="sub">Persistido en este navegador (localStorage). Se acumula entre sesiones.</p>
+      <div class="trend-box" id="trendBox"></div>
+      <div class="grid-2">
+        <div>
+          <h3 style="font-size:15px; margin-bottom:8px;">Drills de fuego seco</h3>
+          <div class="table-wrap" style="max-height:320px; overflow-y:auto;">
+            <table><thead><tr><th>Fecha</th><th>Rondas</th><th>Aciertos</th><th>RT prom.</th></tr></thead><tbody id="histDrillBody"></tbody></table>
+          </div>
+        </div>
+        <div>
+          <h3 style="font-size:15px; margin-bottom:8px;">Grupos de fuego real</h3>
+          <div class="table-wrap" style="max-height:320px; overflow-y:auto;">
+            <table><thead><tr><th>Fecha</th><th>Dist.</th><th>Tiros</th><th>MOA</th></tr></thead><tbody id="histLiveBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button class="btn btn-ghost" id="btnClearHist">Borrar historial</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <span class="pill" style="margin-bottom:10px;">build 2026-08-28.10</span><br>
+    <b>Sobre esta app.</b> Corre 100% en el navegador (PWA instalable). La visión por computadora usa OpenCV.js (WebAssembly) para detectar los 4 anclajes, calcular la homografía y calibrar automáticamente el umbral de luma — sin sliders manuales. La detección de láser (fuego seco) fue probada y ajustada contra cámara y cartucho láser reales a lo largo de varias rondas (ver README para el detalle de cada build); la detección de impactos por diferencia de frames (fuego real) todavía sigue sin probarse contra munición real — vas a necesitar ajustar los umbrales en <code class="inline">js/vision.js</code> una vez que la pruebes con tu equipo. Por eso cada pantalla de cámara tiene un modo manual (tocar sobre la imagen) como respaldo que sí funciona siempre.
+  </div>
+</div>
+
+<!-- Fixed bottom action bar, shown only while Fuego Seco (panel-dry) is the
+     active tab — see .cta-bar in css/style.css and DryFire.ctaSync() in
+     js/drill.js. Sits outside .shell so its position:fixed isn't affected
+     by .shell's own max-width/centering. -->
+<div class="cta-bar" id="dryCtaBar"><button class="btn btn-accent" id="dryCtaBtn">Activar cámara</button></div>
+
+<!-- Vendored locally (was loaded from the docs.opencv.org CDN) so the app
+     works fully offline and doesn't depend on that CDN being reachable —
+     see README for how/why this was switched. -->
+<script src="./vendor/opencv.js" defer onload="if(window.cv){cv['onRuntimeInitialized']=()=>window.__onOpenCvReady && window.__onOpenCvReady();}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+
+<script src="js/utils.js" defer></script>
+<script src="js/constants.js" defer></script>
+<script src="js/storage.js" defer></script>
+<script src="js/target.js" defer></script>
+<script src="js/safety.js" defer></script>
+<script src="js/vision.js" defer></script>
+<script src="js/drill.js" defer></script>
+<script src="js/livefire.js" defer></script>
+<script src="js/app.js" defer></script>
+
+</body>
+</html>

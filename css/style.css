@@ -1,0 +1,293 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#101216;
+  --surface:#181b20;
+  --surface-2:#20242b;
+  --surface-3:#2a2f37;
+  --border:#33393f;
+  --border-soft:#252a30;
+  --text:#e9e7e1;
+  --text-dim:#9aa0a8;
+  --text-faint:#5f656d;
+  --accent:#ff7a1a;
+  --accent-dim:#c75e12;
+  --accent-soft:rgba(255,122,26,0.14);
+  --danger:#e5484d;
+  --success:#45b26b;
+  --info:#4a9fe0;
+  --paper:#efe9dc;
+  --paper-ink:#1b1d20;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'IBM Plex Sans', system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+h1,h2,h3,.mono-label{font-family:'Rajdhani',sans-serif;}
+.num, .mono{font-family:'JetBrains Mono', monospace;}
+::selection{background:var(--accent-soft); color:var(--text);}
+a{color:var(--accent);}
+
+.shell{max-width:1180px; margin:0 auto; padding:20px 16px 90px;}
+
+.topbar{
+  display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  padding-bottom:16px; border-bottom:1px solid var(--border-soft); margin-bottom:18px;
+}
+.brand{display:flex; align-items:center; gap:12px;}
+.brand-mark{
+  width:38px;height:38px; border-radius:9px;
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 5px, var(--accent) 5.5px 7px, transparent 7.5px 12px, var(--accent) 12.5px 14px, transparent 14.5px);
+  background-color:var(--surface-2); border:1px solid var(--border); flex:none;
+}
+.brand-text h1{margin:0; font-size:21px; font-weight:700; letter-spacing:.5px; line-height:1;}
+.brand-text span{display:block; margin-top:3px; font-size:10.5px; letter-spacing:1.3px; text-transform:uppercase; color:var(--text-faint);}
+
+.system-status{
+  display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11.5px;
+  padding:6px 11px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--text-dim);
+}
+.dot{width:8px;height:8px;border-radius:50%; background:var(--danger); box-shadow:0 0 8px var(--danger);}
+.dot.on{background:var(--success); box-shadow:0 0 8px var(--success);}
+
+.tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px;}
+.tab-btn{
+  font-family:'Rajdhani',sans-serif; font-weight:600; font-size:14.5px; letter-spacing:.4px;
+  background:var(--surface); color:var(--text-dim); border:1px solid var(--border);
+  padding:9px 14px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:7px;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.tab-btn .n{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-faint); border:1px solid var(--border); border-radius:4px; padding:1px 5px;}
+.tab-btn:hover:not(:disabled){border-color:var(--accent-dim); color:var(--text);}
+.tab-btn.active{background:var(--accent-soft); border-color:var(--accent); color:var(--text);}
+.tab-btn.active .n{border-color:var(--accent); color:var(--accent);}
+.tab-btn:disabled{opacity:.35; cursor:not-allowed;}
+
+.panel{display:none; animation:fadein .2s ease;}
+.panel.active{display:block;}
+@keyframes fadein{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);}}
+
+.card{background:var(--surface); border:1px solid var(--border-soft); border-radius:12px; padding:18px;}
+.card + .card{margin-top:14px;}
+.card h2{margin:0 0 4px; font-size:18px; font-weight:600; letter-spacing:.3px;}
+.card .sub{color:var(--text-dim); font-size:13px; margin:0 0 14px; line-height:1.5;}
+
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+@media (max-width:820px){ .grid-2{grid-template-columns:1fr;} }
+
+.btn{
+  font-family:'Rajdhani',sans-serif; font-weight:600; font-size:14.5px; letter-spacing:.4px;
+  padding:10px 16px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text);
+  cursor:pointer; transition:filter .12s, transform .05s;
+}
+.btn:hover:not(:disabled){filter:brightness(1.15);}
+.btn:active:not(:disabled){transform:translateY(1px);}
+.btn:disabled{opacity:.4; cursor:not-allowed;}
+.btn-accent{background:var(--accent); border-color:var(--accent); color:#1b1000;}
+.btn-accent:hover:not(:disabled){filter:brightness(1.08);}
+.btn-ghost{background:transparent;}
+.btn-row{display:flex; gap:9px; flex-wrap:wrap; align-items:center;}
+
+label.field-label{
+  display:block; font-family:'Rajdhani',sans-serif; font-size:12.5px; font-weight:600; letter-spacing:.6px;
+  text-transform:uppercase; color:var(--text-dim); margin-bottom:6px;
+}
+select, input[type=number], input[type=text]{
+  width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+  padding:9px 10px; border-radius:7px; font-family:'JetBrains Mono',monospace; font-size:13px;
+}
+select:focus, input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+.field{margin-bottom:12px;}
+
+.pill{
+  display:inline-flex; align-items:center; gap:6px; font-family:'JetBrains Mono',monospace; font-size:11px;
+  padding:3px 9px; border-radius:20px; border:1px solid var(--border); color:var(--text-dim); background:var(--surface-2);
+}
+.pill.success{color:var(--success); border-color:var(--success);}
+.pill.danger{color:var(--danger); border-color:var(--danger);}
+.pill.info{color:var(--info); border-color:var(--info);}
+.pill.accent{color:var(--accent); border-color:var(--accent);}
+/* #liveTargetPicker: a <select> styled as a pill (see the "Cambiar blanco"
+   picker in livefire.js) — a <select> ignores width/max-width via its own
+   content by default on some mobile browsers, so this caps it explicitly
+   instead of letting a long saved-target name push the HUD off-screen. */
+select.pill{max-width:150px; text-overflow:ellipsis; cursor:pointer;}
+
+.mode-options{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+@media (max-width:640px){ .mode-options{grid-template-columns:1fr;} }
+.mode-option{
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:12px; padding:16px;
+  cursor:pointer; transition:border-color .15s, background .15s;
+}
+.mode-option:hover{border-color:var(--accent-dim); background:var(--surface-3);}
+.mode-icon{font-size:22px;}
+.mode-title{font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16.5px; color:var(--text);}
+.mode-desc{font-size:12.5px; color:var(--text-dim); line-height:1.5;}
+
+.safety-progress{display:flex; align-items:center; gap:8px; margin-bottom:14px; font-family:'Rajdhani',sans-serif; font-weight:600; font-size:13px; color:var(--text-dim); letter-spacing:.3px;}
+.safety-progress .dots{display:flex; gap:6px;}
+.safety-progress .dot{width:9px; height:9px; border-radius:50%; background:var(--surface-3); border:1px solid var(--border); flex:none;}
+.safety-progress .dot.done{background:var(--success); border-color:var(--success);}
+.safety-progress .dot.current{background:var(--accent); border-color:var(--accent);}
+
+/* Wizard-style checklist: only the CURRENT step shows its full card (with
+   description + slider); completed steps collapse to a slim one-line row;
+   steps not reached yet are hidden entirely (via .safety-step.locked below,
+   display:none rather than the old dimmed-but-still-full-height look) — the
+   whole point being that confirming all 4 steps no longer requires
+   scrolling through 4 full-height cards, only ever the one you're on right
+   now. See safety.js onProgress() for the class-juggling this pairs with. */
+.safety-steps{display:flex; flex-direction:column; gap:10px;}
+.safety-step{border:1px solid var(--border-soft); background:var(--surface-2); border-radius:10px; padding:15px; transition:border-color .2s, opacity .2s;}
+.safety-step.locked{display:none;}
+.safety-step.done{border-color:var(--success);}
+.safety-step .head{display:flex; align-items:center; gap:10px; margin-bottom:8px;}
+.safety-step .idx{
+  font-family:'JetBrains Mono',monospace; font-size:12px; width:22px;height:22px; border-radius:50%;
+  display:flex;align-items:center;justify-content:center; border:1px solid var(--border); color:var(--text-dim); flex:none;
+}
+.safety-step.done .idx{background:var(--success); border-color:var(--success); color:#06180d;}
+.safety-step h3{margin:0; font-size:15.5px; font-weight:600;}
+.safety-step p{margin:0 0 12px; font-size:13px; color:var(--text-dim); line-height:1.5;}
+/* Collapsed (already-confirmed) step: single compact row, description and
+   slider hidden — swaps the full card for a checkmark + title once it's
+   done, so completed steps don't keep taking up scroll space. */
+.safety-step.collapsed{padding:10px 15px;}
+.safety-step.collapsed .head{margin-bottom:0;}
+.safety-step.collapsed p, .safety-step.collapsed .slider-track{display:none;}
+
+.slider-track{position:relative; height:46px; border-radius:23px; background:var(--surface-3); border:1px solid var(--border); overflow:hidden; user-select:none; touch-action:none;}
+.slider-fill{position:absolute; inset:0; width:0%; background:linear-gradient(90deg, var(--accent-dim), var(--accent)); opacity:.35;}
+.slider-track.done .slider-fill{width:100%; opacity:.55;}
+.slider-label{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Rajdhani',sans-serif; font-weight:600; letter-spacing:1px; font-size:12.5px; color:var(--text-dim); text-transform:uppercase; pointer-events:none;}
+.slider-thumb{position:absolute; top:3px; left:3px; width:40px; height:40px; border-radius:50%; background:var(--accent); color:#1b1000; display:flex; align-items:center; justify-content:center; font-size:16px; cursor:grab; box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.slider-thumb:active{cursor:grabbing;}
+.slider-track.done .slider-thumb{background:var(--success); left:calc(100% - 43px);}
+.slider-track.locked .slider-thumb{background:var(--surface-3); color:var(--text-faint); cursor:not-allowed;}
+
+.gate-banner{display:flex; align-items:center; gap:12px; padding:13px 15px; border-radius:10px; border:1px solid var(--border); background:var(--surface-2); margin-top:14px;}
+.gate-banner .state{font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14.5px; letter-spacing:.5px;}
+
+.preview-wrap{
+  display:flex; align-items:center; justify-content:center;
+  background:repeating-linear-gradient(45deg, #0c0e11 0 10px, #0a0b0d 10px 20px);
+  border-radius:10px; border:1px solid var(--border-soft); padding:20px; min-height:380px;
+}
+canvas{display:block; border-radius:2px; max-width:100%;}
+.legend{display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:12px; font-size:12px; color:var(--text-dim);}
+.legend .item{display:flex; align-items:center; gap:6px;}
+.swatch{width:11px;height:11px;border-radius:3px; flex:none;}
+
+.sim-layout{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:16px;}
+@media (max-width:900px){.sim-layout{grid-template-columns:1fr;}}
+.scope{
+  position:relative; background:#05070a; border-radius:10px; border:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:center; padding:16px; min-height:480px; overflow:hidden;
+}
+.scope video, .scope canvas{max-width:100%; border-radius:4px;}
+/* top/left:0, NOT the scope's 16px padding — the overlay's containing block
+   is #dryLockedWrap/#liveLockedWrap (position:relative), which already sits
+   exactly where the base warp canvas is (that wrap div shrinks to fit its
+   canvas child). Positioning at 16px here double-offsets it: 16px was
+   meant for .scope's own padding, but this canvas is nested one level
+   deeper, inside a wrap that's already correctly placed. That mismatch was
+   a real, constant 16px-right/16px-down misalignment between the projected
+   shapes and the real photo underneath, confirmed pixel-for-pixel via
+   getBoundingClientRect() and reported as "queda desfazado abajo a la
+   derecha" against a real printed target. The SEARCHING-phase guide overlay
+   (#drySearchGuide/#liveSearchGuide) already had an inline top:0;left:0
+   override for the same reason — this makes the LOCKED-phase one match. */
+.scope canvas.overlay{position:absolute; top:0; left:0; cursor:crosshair;}
+.scope-hud{position:absolute; top:12px; left:12px; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px; pointer-events:none; z-index:5;}
+.scope-hud .row{display:flex; gap:6px; align-items:center;}
+.prompt-banner{
+  position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-family:'Rajdhani',sans-serif; font-weight:700;
+  font-size:20px; letter-spacing:1px; padding:9px 20px; border-radius:10px; background:rgba(16,18,22,.88);
+  border:1px solid var(--accent); color:var(--accent); text-align:center; min-width:200px; backdrop-filter:blur(3px); z-index:6;
+}
+.prompt-banner .rt{display:block; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-dim); font-weight:400; letter-spacing:0; margin-top:2px;}
+
+.side-card{background:var(--surface); border:1px solid var(--border-soft); border-radius:12px; padding:15px; display:flex; flex-direction:column; gap:13px;}
+.stat-row{display:flex; justify-content:space-between; align-items:baseline; font-size:12.5px; padding:6px 0; border-bottom:1px dashed var(--border-soft);}
+.stat-row:last-child{border-bottom:none;}
+.stat-row .v{font-family:'JetBrains Mono',monospace; color:var(--text); font-size:13.5px;}
+
+table{width:100%; border-collapse:collapse; font-size:12px;}
+th{text-align:left; font-family:'Rajdhani',sans-serif; font-weight:600; letter-spacing:.4px; text-transform:uppercase; font-size:10.5px; color:var(--text-faint); padding:6px 8px; border-bottom:1px solid var(--border);}
+td{padding:6px 8px; border-bottom:1px solid var(--border-soft); font-family:'JetBrains Mono',monospace;}
+tr:last-child td{border-bottom:none;}
+.table-wrap{overflow-x:auto;}
+.success-txt{color:var(--success);}
+.danger-txt{color:var(--danger);}
+
+.toggle-row{display:flex; gap:8px; flex-wrap:wrap;}
+.toggle-btn{flex:1; min-width:60px; padding:8px; border-radius:7px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-dim); font-family:'Rajdhani',sans-serif; font-weight:600; cursor:pointer; font-size:12.5px;}
+.toggle-btn.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
+
+/* Fixed bottom action bar — the "next thing to do" button (Activar cámara /
+   Iniciar Drill / Detener drill, whichever applies) pinned to the bottom of
+   the screen at all times, mirroring whichever of the real buttons in the
+   side card is currently the active one. Requested directly: having to
+   scroll down past the camera preview and every config field just to reach
+   the start button after calibrating felt like a web page, not an app —
+   this is the standard mobile-app pattern for "the primary action is always
+   one tap away, never behind a scroll." See DryFire's ctaSync() in
+   drill.js, which keeps this in sync with the real buttons rather than
+   duplicating their state logic. */
+.cta-bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:40; display:none;
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background:rgba(12,14,17,.92); backdrop-filter:blur(6px); border-top:1px solid var(--border-soft);
+}
+.cta-bar .btn{width:100%; max-width:1180px; margin:0 auto; display:block;}
+
+.difficulty-desc{font-size:12px; color:var(--text-dim); line-height:1.5; margin:6px 0 0;}
+
+/* Session-trend mini chart on the Registro tab — a plain inline SVG
+   sparkline (no charting library, works fully offline like everything
+   else) of avg reaction time across recent sessions, oldest to newest. */
+.trend-box{background:var(--surface-2); border:1px solid var(--border-soft); border-radius:10px; padding:14px; margin-bottom:16px;}
+.trend-headline{font-family:'Rajdhani',sans-serif; font-weight:600; font-size:14.5px; margin:0 0 10px;}
+.trend-headline .delta-down{color:var(--success);}
+.trend-headline .delta-up{color:var(--danger);}
+.trend-svg-wrap{width:100%; overflow-x:auto;}
+.trend-svg-wrap svg{display:block; min-width:280px;}
+
+.zoom-ctrl{
+  position:absolute; bottom:12px; left:12px; right:12px; z-index:6;
+  display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px;
+  background:rgba(16,18,22,.85); border:1px solid var(--border); backdrop-filter:blur(3px);
+}
+.zoom-btn{
+  width:30px; height:30px; flex:none; border-radius:7px; border:1px solid var(--border); background:var(--surface-2);
+  color:var(--text); font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px; cursor:pointer; line-height:1;
+}
+.zoom-btn:hover{filter:brightness(1.2);}
+.zoom-ctrl input[type=range]{flex:1; accent-color:var(--accent);}
+.zoom-val{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); width:42px; text-align:right; flex:none;}
+
+.empty-hint{padding:36px 18px; text-align:center; color:var(--text-faint); font-size:13px; line-height:1.6;}
+.empty-hint .big{font-size:26px; display:block; margin-bottom:8px;}
+
+.footer-note{margin-top:26px; padding-top:16px; border-top:1px solid var(--border-soft); font-size:11.5px; color:var(--text-faint); line-height:1.7;}
+.footer-note b{color:var(--text-dim);}
+code.inline{background:var(--surface-2); border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--accent);}
+
+.banner-warn{
+  display:flex; gap:10px; align-items:flex-start; background:rgba(229,72,77,.08); border:1px solid var(--danger);
+  border-radius:10px; padding:12px 14px; font-size:12.5px; color:var(--text-dim); line-height:1.55; margin-bottom:14px;
+}
+.banner-warn b{color:var(--danger);}
+.banner-info{
+  display:flex; gap:10px; align-items:flex-start; background:rgba(74,159,224,.08); border:1px solid var(--info);
+  border-radius:10px; padding:12px 14px; font-size:12.5px; color:var(--text-dim); line-height:1.55; margin-bottom:14px;
+}
+.banner-info b{color:var(--info);}
