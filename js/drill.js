@@ -686,7 +686,7 @@ const DryFire = (() => {
   }
 
   function stopDrill() {
-    if (drill && drill.idx > 0) persistSession(drill);
+    if (drill && drill.idx > 0) { persistSession(drill); flashScreen('var(--danger)', 450); }
     drill = null;
     $('#btnStartDrill').style.display = '';
     $('#btnStopDrill').style.display = 'none';
@@ -780,6 +780,7 @@ const DryFire = (() => {
       drill.state = 'AWAIT';
       drill.awaitStart = nowMs();
       banner.innerHTML = `${drill.clueText}<span class="rt">¡YA!</span>`;
+      flashScreen('var(--success)');
     };
 
     if (!audioCuesOn) {
@@ -878,6 +879,7 @@ const DryFire = (() => {
     const banner = $('#dryPrompt');
     banner.innerHTML = `Drill completo — ${drill.hits}/${drill.rounds} aciertos`;
     banner.style.borderColor = 'var(--accent)'; banner.style.color = 'var(--accent)';
+    flashScreen('var(--danger)', 450);
     persistSession(drill);
     setTimeout(() => {
       $('#btnStartDrill').style.display = '';

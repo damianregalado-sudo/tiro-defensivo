@@ -59,6 +59,9 @@ const App = (() => {
     refreshTargetUi();
   }
 
+  // El panel "JSON del blanco" (#targetJson) quedó oculto en el HTML — ver
+  // nota ahí. Esta función le sigue escribiendo contenido por si se
+  // reactiva algún día, pero nadie lo ve.
   function renderJson() {
     $('#targetJson').textContent = JSON.stringify(Target.toJson(target), null, 2);
   }
@@ -132,15 +135,6 @@ const App = (() => {
     upsertSavedTarget(null);
   }
 
-  function viewSavedTargetJson(id) {
-    const rec = Storage.get('tm_saved_targets', []).find(r => r.id === id);
-    if (!rec) return;
-    $('#savedTargetJsonWrap').style.display = '';
-    $('#savedTargetJsonName').textContent = rec.name;
-    $('#savedTargetJson').textContent = JSON.stringify(rec.metatagJson || Target.toJson(rec.target), null, 2);
-    $('#savedTargetJsonWrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
   // Shared by manual "Cargar" and by camera auto-recognition — puts a target
   // (a full internal object, already cloned by the caller) into the active
   // slot and keeps the generator form/preview/JSON in sync with it.
@@ -205,13 +199,11 @@ const App = (() => {
         <td>${fmtDate(new Date(r.createdAt).toISOString())}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-ghost" style="padding:4px 9px;font-size:12px;" data-load="${r.id}">Cargar</button>
-          <button class="btn btn-ghost" style="padding:4px 9px;font-size:12px;" data-view="${r.id}">Ver JSON</button>
           <button class="btn btn-ghost" style="padding:4px 9px;font-size:12px;color:var(--danger);" data-del="${r.id}">Eliminar</button>
         </td>
       </tr>
     `).join('') || `<tr><td colspan="5" style="color:var(--text-faint);">${q ? 'Ningún blanco guardado coincide con la búsqueda.' : 'Todavía no guardaste ningún blanco. Generá uno y tocá "Guardar blanco" (o simplemente exportá el PDF — ahora se guarda solo).'}</td></tr>`;
     $$('#savedTargetsBody [data-load]').forEach(b => b.addEventListener('click', () => loadSavedTarget(b.dataset.load)));
-    $$('#savedTargetsBody [data-view]').forEach(b => b.addEventListener('click', () => viewSavedTargetJson(b.dataset.view)));
     $$('#savedTargetsBody [data-del]').forEach(b => b.addEventListener('click', () => deleteSavedTarget(b.dataset.del)));
   }
 

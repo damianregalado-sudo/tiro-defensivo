@@ -272,6 +272,16 @@ La solución no es "arreglar la calibración" (ya está bien) sino no depender d
 
 *Nota honesta*: verificado con pruebas automatizadas que el selector se llena con los blancos guardados, que elegir uno cambia efectivamente el blanco activo (compartido con Generador de Blanco), y que el cartel de reconocimiento lo confirma. Lo que no pude verificar sin tu teléfono es si a 15 metros el metatag directamente nunca se lee (limitación física de resolución/distancia) o si a veces sí funciona — con este cambio ya no debería importar, porque no dependés más de que funcione.
 
+**Build 2026-08-28.11 — limpieza de mensajes técnicos + flash de pantalla verde/rojo en el drill.**
+
+Sacaste dos cosas de la vista de la app por ser demasiado técnicas para el uso normal: el párrafo "Sobre esta app" del pie de página (mencionaba OpenCV.js, WebAssembly, homografía — jerga de desarrollo, no algo que un tirador necesite ver) y el panel "JSON del blanco (Target Metatag decodificado)" junto con el botón "Ver JSON" de cada blanco guardado (un volcado crudo de datos, pensado para debug mío, no para la app terminada). Los saqué de la pantalla; el código que los alimentaba se dejó anulado en vez de borrado línea por línea, para no arriesgar romper otra cosa que dependiera de esas mismas funciones.
+
+También agregué el flash de pantalla completa que pediste: **verde** en el instante exacto en que el drill da la orden de disparo (el "¡YA!" de cada ronda, tanto si usás el pitido/voz como si no), y **rojo** cuando la sesión termina — ya sea porque se cumplieron todas las rondas o porque tocaste "Detener". El flash usa `pointer-events:none`, o sea que nunca tapa ni bloquea un toque de disparo manual sobre el video. Por ahora solo lo agregué al modo Fuego Seco (drill con rondas/"¡YA!") — Fuego Real no tiene ese concepto de "orden de disparo" por ronda, así que no aplica ahí; avisame si lo querés en algún punto de ese modo también y vemos qué evento dispararía el flash.
+
+*Nota honesta*: verificado con pruebas automatizadas (Playwright, sin cámara) que los dos elementos técnicos ya no aparecen en el texto visible de la página, que el botón "Ver JSON" ya no existe, y que la función `flashScreen()` sube y baja la opacidad del overlay como se espera al llamarla con cada color. Lo que no pude verificar sin tu teléfono es cómo se ve/siente el flash en la práctica — duración, intensidad, si se nota bien con el sol pegándole a la pantalla, etc. — así que la duración (verde: instantáneo y breve: rojo: un poco más largo, 450ms) es un punto de partida a ajustar según lo que veas.
+
+*Nota sobre la suite de tests*: esta sesión arrancó en un contenedor nuevo (se perdió el acceso directo a GitHub de la sesión anterior) y con eso se perdieron los 21 tests Playwright acumulados en builds previos — no viven en el repo, así que no había forma de recuperarlos. Escribí un test nuevo y más chico enfocado solo en lo que cambia en este build; los 21 anteriores no se volvieron a correr contra este build. Si en algún momento el conjunto de tests es algo que te importa conservar entre sesiones, lo ideal sería que vivan dentro del repo (una carpeta `tests/`) en vez de en `/tmp` de la sesión de turno.
+
 ## Estructura del proyecto
 
 ```

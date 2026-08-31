@@ -13,6 +13,8 @@
 </head>
 <body>
 
+<div class="screen-flash" id="screenFlash"></div>
+
 <div class="shell">
 
   <div class="topbar">
@@ -24,7 +26,7 @@
       </div>
     </div>
     <div class="system-status">
-      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.10</span>
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.11</span>
       <span class="dot" id="statusDot"></span>
       <span id="statusText">SAFETY GATE: LOCKED</span>
     </div>
@@ -234,13 +236,11 @@
         <input type="file" id="importLibraryFile" accept="application/json" style="display:none;">
       </div>
       <p class="sub" style="margin-top:8px;">Los blancos guardados viven en este navegador/dispositivo. Actualizar la app NO los borra, pero cambiar de celular, reinstalar, o borrar datos del sitio sí — exportá este backup de vez en cuando y guardalo (o pasalo al nuevo dispositivo) para no perderlos.</p>
-      <div class="table-wrap" id="savedTargetJsonWrap" style="display:none; margin-top:14px;">
-        <label class="field-label">JSON guardado para "<span id="savedTargetJsonName"></span>" — esto es lo que la app usa al escanear este blanco</label>
-        <pre class="mono" id="savedTargetJson" style="margin:0; font-size:12px; color:var(--text-dim); white-space:pre-wrap;"></pre>
-      </div>
     </div>
 
-    <div class="card">
+    <!-- Panel técnico "JSON del blanco" oculto por el mismo motivo — #targetJson sigue
+         recibiendo contenido desde js/app.js (renderJson) pero nunca se muestra. -->
+    <div class="card" style="display:none !important;">
       <h2>JSON del blanco (Target Metatag decodificado)</h2>
       <p class="sub">Lo que el motor de visión extrae del metatag y usa para cargar el mapa de zonas.</p>
       <div class="table-wrap"><pre class="mono" id="targetJson" style="margin:0; font-size:12px; color:var(--text-dim); white-space:pre-wrap;">// generá un blanco para ver el JSON</pre></div>
@@ -390,8 +390,7 @@
   </div>
 
   <div class="footer-note">
-    <span class="pill" style="margin-bottom:10px;">build 2026-08-28.10</span><br>
-    <b>Sobre esta app.</b> Corre 100% en el navegador (PWA instalable). La visión por computadora usa OpenCV.js (WebAssembly) para detectar los 4 anclajes, calcular la homografía y calibrar automáticamente el umbral de luma — sin sliders manuales. La detección de láser (fuego seco) fue probada y ajustada contra cámara y cartucho láser reales a lo largo de varias rondas (ver README para el detalle de cada build); la detección de impactos por diferencia de frames (fuego real) todavía sigue sin probarse contra munición real — vas a necesitar ajustar los umbrales en <code class="inline">js/vision.js</code> una vez que la pruebes con tu equipo. Por eso cada pantalla de cámara tiene un modo manual (tocar sobre la imagen) como respaldo que sí funciona siempre.
+    <span class="pill">build 2026-08-28.11</span>
   </div>
 </div>
 

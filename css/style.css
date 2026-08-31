@@ -242,6 +242,17 @@ tr:last-child td{border-bottom:none;}
    one tap away, never behind a scroll." See DryFire's ctaSync() in
    drill.js, which keeps this in sync with the real buttons rather than
    duplicating their state logic. */
+/* Flash de pantalla completa: verde en la orden de disparo ("¡YA!" de cada
+   ronda), rojo al terminar la sesión de Fuego Seco. Ver DryFire.flashScreen
+   en js/drill.js. pointer-events:none para que nunca tape un toque/disparo
+   manual sobre el video que esté debajo. */
+.screen-flash{
+  position:fixed; inset:0; z-index:999; pointer-events:none;
+  opacity:0; background:var(--success);
+  transition:opacity 120ms ease-out;
+}
+.screen-flash.is-on{ transition:opacity 40ms ease-in; }
+
 .cta-bar{
   position:fixed; left:0; right:0; bottom:0; z-index:40; display:none;
   padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
