@@ -29,13 +29,33 @@ const App = (() => {
   }
 
   // ---- target generator ----
+  // Selector de familia de blanco ("Reacción" vs "Puntería estilo IPSC") —
+  // ver constants.js/target.js para la geometría fija de la silueta A/C/D.
+  // Solo cambia qué controles se muestran acá en el generador; el resto de
+  // la app (drill.js/livefire.js) decide su comportamiento leyendo
+  // target.family directamente.
+  function getSelectedFamily() {
+    const active = $('.family-btn.active');
+    return active && active.dataset.family === 'ipsc' ? 'ipsc' : 'reaction';
+  }
+  function setFamilyUi(fam) {
+    $$('.family-btn').forEach(b => b.classList.toggle('active', b.dataset.family === fam));
+    $('#ipscNote').style.display = fam === 'ipsc' ? '' : 'none';
+    $('#shapeCountWrap').style.display = fam === 'ipsc' ? 'none' : '';
+    $('#reactionLegend').style.display = fam === 'ipsc' ? 'none' : '';
+    $('#btnReroll').style.display = fam === 'ipsc' ? 'none' : '';
+  }
+
   function updateTargetMeta() {
     const spec = PAGE_SPECS[target.pageSize];
+    const typeTag = target.family === 'ipsc'
+      ? `<span class="pill">Puntería (estilo IPSC)</span>`
+      : `<span class="pill">${target.shapes.length} figuras</span>`;
     $('#targetMeta').innerHTML = `<span class="pill accent">${spec.label}</span>
       <span class="pill ${target.mode === 'LIVE' ? 'danger' : 'info'}">${target.mode === 'LIVE' ? 'FUEGO REAL' : 'FUEGO SECO'}</span>
       <span class="pill">Diseñado: ${target.distDesigned} m</span>
       ${target.mode === 'DRY' ? `<span class="pill">Simulado: ${target.distSimulated} m</span>` : ''}
-      <span class="pill">${target.shapes.length} figuras</span>`;
+      ${typeTag}`;
   }
 
   function refreshTargetUi() {
@@ -55,6 +75,7 @@ const App = (() => {
       distDesigned: parseFloat($('#distDesigned').value) || 3,
       distSimulated: parseFloat($('#distSimulated').value) || 15,
       shapeCount: parseInt($('#shapeCount').value, 10) || 7,
+      family: getSelectedFamily(),
     });
     refreshTargetUi();
   }
@@ -145,7 +166,8 @@ const App = (() => {
     $('#pageMode').dispatchEvent(new Event('change'));
     $('#distDesigned').value = target.distDesigned;
     $('#distSimulated').value = target.distSimulated;
-    $('#shapeCount').value = target.shapes.length;
+    setFamilyUi(target.family === 'ipsc' ? 'ipsc' : 'reaction');
+    if (target.family !== 'ipsc') $('#shapeCount').value = target.shapes.length;
     refreshTargetUi();
   }
 
@@ -193,7 +215,7 @@ const App = (() => {
     }
     $('#savedTargetsBody').innerHTML = list.map(r => `
       <tr>
-        <td>${escapeHtml(r.name)}<br><span style="color:var(--text-faint);font-size:11px;">ID ${r.target.id}</span></td>
+        <td>${escapeHtml(r.name)}${r.target.family === 'ipsc' ? ' <span class="pill" style="padding:1px 6px;font-size:10px;">IPSC</span>' : ''}<br><span style="color:var(--text-faint);font-size:11px;">ID ${r.target.id}</span></td>
         <td>${PAGE_SPECS[r.target.pageSize].label}</td>
         <td>${r.target.mode === 'LIVE' ? 'Real' : 'Seco'}</td>
         <td>${fmtDate(new Date(r.createdAt).toISOString())}</td>
@@ -323,6 +345,7 @@ const App = (() => {
   function renderHistory() {
     const drillHist = Storage.get('tm_drill_history', []);
     const liveHist = Storage.get('tm_live_history', []);
+    const punteriaHist = Storage.get('tm_punteria_history', []);
     renderTrend(drillHist);
     $('#histDrillBody').innerHTML = drillHist.map(h =>
       `<tr><td>${fmtDate(h.date)}</td><td>${h.rounds}</td><td>${h.hits}</td><td>${h.avgRt.toFixed(0)}ms</td></tr>`
@@ -330,6 +353,9 @@ const App = (() => {
     $('#histLiveBody').innerHTML = liveHist.map(h =>
       `<tr><td>${fmtDate(h.date)}</td><td>${h.distance}m</td><td>${h.shots}</td><td>${h.moa.toFixed(2)}</td></tr>`
     ).join('') || `<tr><td colspan="4" style="color:var(--text-faint);">Sin datos aún</td></tr>`;
+    $('#histPunteriaBody').innerHTML = punteriaHist.map(h =>
+      `<tr><td>${fmtDate(h.date)}</td><td>${h.mode === 'LIVE' ? 'Real' : 'Seco'}</td><td>${h.shots}</td><td>${h.a}</td><td>${h.c}</td><td>${h.d}</td><td>${h.miss}</td></tr>`
+    ).join('') || `<tr><td colspan="7" style="color:var(--text-faint);">Sin datos aún</td></tr>`;
   }
 
   function init() {
@@ -338,10 +364,11 @@ const App = (() => {
 
     $('#btnGenerate').addEventListener('click', buildTarget);
     $('#btnReroll').addEventListener('click', () => {
-      if (!target) { buildTarget(); return; }
+      if (!target || target.family === 'ipsc') { buildTarget(); return; }
       target.shapes = Target.generateShapes(target.shapes.length, target.pageSize);
       refreshTargetUi();
     });
+    $$('.family-btn').forEach(b => b.addEventListener('click', () => setFamilyUi(b.dataset.family)));
     $('#pageMode').addEventListener('change', () => {
       $('#distSimWrap').style.display = $('#pageMode').value === 'DRY' ? '' : 'none';
     });
@@ -367,6 +394,9 @@ const App = (() => {
     });
     $('#btnStartDrill').addEventListener('click', DryFire.startDrill);
     $('#btnStopDrill').addEventListener('click', DryFire.stopDrill);
+    $('#btnStartPunteria').addEventListener('click', DryFire.startPunteria);
+    $('#btnNewPunteriaSerie').addEventListener('click', DryFire.newPunteriaSerie);
+    $('#btnStopPunteria').addEventListener('click', DryFire.stopPunteria);
     // Scoped to laser-color buttons only (data-color) — the cue-order
     // buttons below also carry class .toggle-btn for shared styling, but
     // they're a separate group and must not clear/set .active on each
@@ -427,6 +457,7 @@ const App = (() => {
     $('#btnClearHist').addEventListener('click', () => {
       Storage.set('tm_drill_history', []);
       Storage.set('tm_live_history', []);
+      Storage.set('tm_punteria_history', []);
       renderHistory();
     });
 

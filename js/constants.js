@@ -57,3 +57,22 @@ function shapeRadiusRangeGrid(pageSize) {
     rMax: (SHAPE_DIAM_MM_MAX / 2) / mmPerUnit,
   };
 }
+
+// ---- Puntería (silueta con zonas A/C/D, estilo competencia) ---------------
+// Geometría FIJA (no se sortea por blanco, a diferencia de las figuras de
+// reacción) — pensada para parecerse a la proporción general de un blanco
+// métrico de competencia (torso + cabeza + zonas A/C/D), pero es un diseño
+// propio, NO una reproducción del blanco oficial de IPSC ni de ningún otro
+// organismo: IPSC licencia su blanco métrico, así que copiarlo tal cual y
+// distribuirlo sería un problema de derechos, no técnico. Todo en unidades
+// de grilla (0-1000), el mismo espacio normalizado que usan las figuras de
+// reacción — así el mismo motor de homografía/detección de disparos sirve
+// sin cambios para esta familia de blanco también.
+const IPSC_HEAD = { cx: 500, cy: 150, r: 68 };
+const IPSC_TORSO_POLY = [
+  { x: 330, y: 232 }, { x: 670, y: 232 }, // hombros
+  { x: 652, y: 470 }, { x: 618, y: 660 }, // costado derecho hasta la cadera
+  { x: 382, y: 660 }, { x: 348, y: 470 }, // costado izquierdo de vuelta
+];
+const IPSC_ZONE_A = { cx: 500, cy: 335, rx: 100, ry: 155 };
+const IPSC_ZONE_C = { cx: 500, cy: 390, rx: 185, ry: 250 };

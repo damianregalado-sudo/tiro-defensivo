@@ -26,7 +26,7 @@
       </div>
     </div>
     <div class="system-status">
-      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.13</span>
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.14</span>
       <span class="dot" id="statusDot"></span>
       <span id="statusText">ESTADO DE SEGURIDAD: BLOQUEADO</span>
     </div>
@@ -155,6 +155,15 @@
         <p class="sub">Define el papel y el modo. Calcula el área segura (margen de 10&nbsp;mm), coloca los 4 anclajes fiduciales y el código óptico de identificación. El PDF exportado es vectorial a escala real.</p>
 
         <div class="field">
+          <label class="field-label">Tipo de blanco</label>
+          <div class="toggle-row">
+            <button class="toggle-btn family-btn active" data-family="reaction">Reacción (formas/colores)</button>
+            <button class="toggle-btn family-btn" data-family="ipsc">Puntería (estilo IPSC)</button>
+          </div>
+          <p class="sub" id="ipscNote" style="display:none;">Silueta con zonas A/C/D inspirada en las proporciones generales de un blanco de competencia — es un diseño propio para entrenar, no una reproducción oficial ni certificada de IPSC ni de ningún otro organismo.</p>
+        </div>
+
+        <div class="field">
           <label class="field-label">Tamaño de papel</label>
           <select id="pageSize">
             <option value="A4">A4 — área segura 190 × 277 mm</option>
@@ -182,7 +191,7 @@
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" id="shapeCountWrap">
           <label class="field-label">Cantidad de figuras</label>
           <input type="number" id="shapeCount" value="7" min="3" max="12" step="1">
           <p class="sub">Las figuras miden 5-8cm (pensado para reacción rápida, no precisión). Con ese tamaño puede que no entren todas las que pidas sin superponerse — si eso pasa, el blanco se genera igual con las que sí entraron.</p>
@@ -196,7 +205,7 @@
           <button class="btn btn-ghost" id="btnSaveTarget" disabled>💾 Guardar blanco</button>
         </div>
 
-        <div class="legend">
+        <div class="legend" id="reactionLegend">
           <div class="item"><span class="swatch" style="background:#e5484d;"></span>Rojo</div>
           <div class="item"><span class="swatch" style="background:#4a9fe0;"></span>Azul</div>
           <div class="item"><span class="swatch" style="background:#f4c430;"></span>Amarillo</div>
@@ -271,52 +280,74 @@
           </div>
         </div>
 
-        <div>
-          <label class="field-label">Rondas del drill</label>
-          <input type="number" id="drillRounds" value="8" min="3" max="20">
-        </div>
-
-        <div>
-          <label class="field-label">Nivel de dificultad</label>
-          <div class="toggle-row">
-            <button class="toggle-btn difficulty-btn active" data-difficulty="1">1</button>
-            <button class="toggle-btn difficulty-btn" data-difficulty="2">2</button>
-            <button class="toggle-btn difficulty-btn" data-difficulty="3">3</button>
-            <button class="toggle-btn difficulty-btn" data-difficulty="4">4</button>
+        <div id="drySideReaction">
+          <div>
+            <label class="field-label">Rondas del drill</label>
+            <input type="number" id="drillRounds" value="8" min="3" max="20">
           </div>
-          <p class="difficulty-desc" id="difficultyDesc"></p>
-        </div>
 
-        <div>
-          <label class="field-label">
-            <input type="checkbox" id="audioCuesToggle" checked style="vertical-align:middle; margin-right:6px;">
-            Señales de audio (voz + pitido)
-          </label>
-        </div>
-        <div id="cueOrderWrap">
-          <label class="field-label">Orden de la señal</label>
-          <div class="toggle-row">
-            <button class="toggle-btn cue-order-btn active" data-cue-order="nameFirst">Nombre → Pitido</button>
-            <button class="toggle-btn cue-order-btn" data-cue-order="beepFirst">Pitido → Nombre</button>
+          <div>
+            <label class="field-label">Nivel de dificultad</label>
+            <div class="toggle-row">
+              <button class="toggle-btn difficulty-btn active" data-difficulty="1">1</button>
+              <button class="toggle-btn difficulty-btn" data-difficulty="2">2</button>
+              <button class="toggle-btn difficulty-btn" data-difficulty="3">3</button>
+              <button class="toggle-btn difficulty-btn" data-difficulty="4">4</button>
+            </div>
+            <p class="difficulty-desc" id="difficultyDesc"></p>
           </div>
-          <p class="sub" style="margin-top:6px;">
-            "Nombre → Pitido": te dice a qué disparar, y el pitido es la señal de arrancar (el tiempo de reacción se mide desde el pitido).
-            "Pitido → Nombre": el pitido avisa que ya viene el objetivo, y el tiempo se mide desde que termina de decírtelo — recién ahí sabés a qué tirar.
-          </p>
+
+          <div>
+            <label class="field-label">
+              <input type="checkbox" id="audioCuesToggle" checked style="vertical-align:middle; margin-right:6px;">
+              Señales de audio (voz + pitido)
+            </label>
+          </div>
+          <div id="cueOrderWrap">
+            <label class="field-label">Orden de la señal</label>
+            <div class="toggle-row">
+              <button class="toggle-btn cue-order-btn active" data-cue-order="nameFirst">Nombre → Pitido</button>
+              <button class="toggle-btn cue-order-btn" data-cue-order="beepFirst">Pitido → Nombre</button>
+            </div>
+            <p class="sub" style="margin-top:6px;">
+              "Nombre → Pitido": te dice a qué disparar, y el pitido es la señal de arrancar (el tiempo de reacción se mide desde el pitido).
+              "Pitido → Nombre": el pitido avisa que ya viene el objetivo, y el tiempo se mide desde que termina de decírtelo — recién ahí sabés a qué tirar.
+            </p>
+          </div>
+
+          <button class="btn btn-accent" id="btnStartDrill" disabled>▶ Iniciar Drill Mente-Acción</button>
+          <button class="btn btn-ghost" id="btnStopDrill" style="display:none;">■ Detener drill</button>
+
+          <div class="stat-row"><span>Ronda</span><span class="v" id="statRound">0 / 0</span></div>
+          <div class="stat-row"><span>Aciertos</span><span class="v success-txt" id="statHits">0</span></div>
+          <div class="stat-row"><span>Fallos</span><span class="v danger-txt" id="statMiss">0</span></div>
+          <div class="stat-row"><span>Tiempo reacción prom.</span><span class="v" id="statAvgRt">&mdash;</span></div>
+
+          <div>
+            <label class="field-label">Registro de la sesión</label>
+            <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+              <table><thead><tr><th>#</th><th>Consigna</th><th>T. Reac.</th><th>Res.</th><th>Detalle</th></tr></thead><tbody id="drillLogBody"></tbody></table>
+            </div>
+          </div>
         </div>
 
-        <button class="btn btn-accent" id="btnStartDrill" disabled>▶ Iniciar Drill Mente-Acción</button>
-        <button class="btn btn-ghost" id="btnStopDrill" style="display:none;">■ Detener drill</button>
+        <div id="drySideIpsc" style="display:none;">
+          <p class="sub">Puntería estilo IPSC: sin consigna ni tiempo — apuntá y dispará tantas veces como quieras. Cada disparo se anota según la zona donde cayó (A/C/D/fuera).</p>
+          <button class="btn btn-accent" id="btnStartPunteria" disabled>▶ Iniciar sesión de puntería</button>
+          <button class="btn btn-ghost" id="btnNewPunteriaSerie" style="display:none;">Nueva serie</button>
+          <button class="btn btn-ghost" id="btnStopPunteria" style="display:none;">■ Finalizar sesión</button>
 
-        <div class="stat-row"><span>Ronda</span><span class="v" id="statRound">0 / 0</span></div>
-        <div class="stat-row"><span>Aciertos</span><span class="v success-txt" id="statHits">0</span></div>
-        <div class="stat-row"><span>Fallos</span><span class="v danger-txt" id="statMiss">0</span></div>
-        <div class="stat-row"><span>Tiempo reacción prom.</span><span class="v" id="statAvgRt">&mdash;</span></div>
+          <div class="stat-row"><span>Disparos</span><span class="v" id="statPunteriaShots">0</span></div>
+          <div class="stat-row"><span>Zona A</span><span class="v success-txt" id="statPunteriaA">0</span></div>
+          <div class="stat-row"><span>Zona C</span><span class="v" id="statPunteriaC">0</span></div>
+          <div class="stat-row"><span>Zona D</span><span class="v" id="statPunteriaD">0</span></div>
+          <div class="stat-row"><span>Fuera del blanco</span><span class="v danger-txt" id="statPunteriaMiss">0</span></div>
 
-        <div>
-          <label class="field-label">Registro de la sesión</label>
-          <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
-            <table><thead><tr><th>#</th><th>Consigna</th><th>T. Reac.</th><th>Res.</th><th>Detalle</th></tr></thead><tbody id="drillLogBody"></tbody></table>
+          <div>
+            <label class="field-label">Registro de series</label>
+            <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+              <table><thead><tr><th>#</th><th>Disparos</th><th>A</th><th>C</th><th>D</th><th>Fuera</th></tr></thead><tbody id="punteriaLogBody"></tbody></table>
+            </div>
           </div>
         </div>
       </div>
@@ -348,15 +379,34 @@
         <div class="btn-row">
           <button class="btn btn-ghost" id="btnNewGroup">Nuevo grupo (virtual patching)</button>
         </div>
-        <div class="stat-row"><span>Impactos</span><span class="v" id="statShots">0</span></div>
-        <div class="stat-row"><span>Dispersión extrema</span><span class="v" id="statSpread">&mdash;</span></div>
-        <div class="stat-row"><span>Punto medio de impacto</span><span class="v" id="statMpi">&mdash;</span></div>
-        <div class="stat-row"><span>Agrupamiento (MOA)</span><span class="v" id="statMoa">&mdash;</span></div>
 
-        <div>
-          <label class="field-label">Historial de grupos</label>
-          <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
-            <table><thead><tr><th>#</th><th>Dist.</th><th>Tiros</th><th>MOA</th></tr></thead><tbody id="liveLogBody"></tbody></table>
+        <div id="liveStatsReaction">
+          <div class="stat-row"><span>Impactos</span><span class="v" id="statShots">0</span></div>
+          <div class="stat-row"><span>Dispersión extrema</span><span class="v" id="statSpread">&mdash;</span></div>
+          <div class="stat-row"><span>Punto medio de impacto</span><span class="v" id="statMpi">&mdash;</span></div>
+          <div class="stat-row"><span>Agrupamiento (MOA)</span><span class="v" id="statMoa">&mdash;</span></div>
+
+          <div>
+            <label class="field-label">Historial de grupos</label>
+            <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+              <table><thead><tr><th>#</th><th>Dist.</th><th>Tiros</th><th>MOA</th></tr></thead><tbody id="liveLogBody"></tbody></table>
+            </div>
+          </div>
+        </div>
+
+        <div id="liveStatsIpsc" style="display:none;">
+          <div class="stat-row"><span>Impactos</span><span class="v" id="statShotsIpsc">0</span></div>
+          <div class="stat-row"><span>Zona A</span><span class="v success-txt" id="statLiveA">0</span></div>
+          <div class="stat-row"><span>Zona C</span><span class="v" id="statLiveC">0</span></div>
+          <div class="stat-row"><span>Zona D</span><span class="v" id="statLiveD">0</span></div>
+          <div class="stat-row"><span>Fuera del blanco</span><span class="v danger-txt" id="statLiveMiss">0</span></div>
+          <div class="stat-row"><span>Agrupamiento (MOA)</span><span class="v" id="statMoaIpsc">&mdash;</span></div>
+
+          <div>
+            <label class="field-label">Historial de series</label>
+            <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
+              <table><thead><tr><th>#</th><th>Dist.</th><th>Tiros</th><th>A</th><th>C</th><th>D</th><th>Fuera</th></tr></thead><tbody id="punteriaLiveLogBody"></tbody></table>
+            </div>
           </div>
         </div>
       </div>
@@ -383,6 +433,12 @@
           </div>
         </div>
       </div>
+      <div style="margin-top:18px;">
+        <h3 style="font-size:15px; margin-bottom:8px;">Puntería (estilo IPSC)</h3>
+        <div class="table-wrap" style="max-height:320px; overflow-y:auto;">
+          <table><thead><tr><th>Fecha</th><th>Modo</th><th>Tiros</th><th>A</th><th>C</th><th>D</th><th>Fuera</th></tr></thead><tbody id="histPunteriaBody"></tbody></table>
+        </div>
+      </div>
       <div class="btn-row" style="margin-top:16px;">
         <button class="btn btn-ghost" id="btnClearHist">Borrar historial</button>
       </div>
@@ -390,7 +446,7 @@
   </div>
 
   <div class="footer-note">
-    <span class="pill">build 2026-08-28.13</span>
+    <span class="pill">build 2026-08-28.14</span>
   </div>
 </div>
 

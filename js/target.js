@@ -70,18 +70,118 @@ const Target = (() => {
   }
 
   function build(config) {
-    const { pageSize, mode, distDesigned, distSimulated, shapeCount } = config;
+    const { pageSize, mode, distDesigned, distSimulated, shapeCount, family } = config;
+    const fam = family === 'ipsc' ? 'ipsc' : 'reaction';
     return {
       // 16-bit id, printed into the metatag, is how the camera later
       // recognizes WHICH saved target it's looking at — see encodeBits/
       // decodeBits below.
       id: randInt(1, 65535),
-      pageSize, mode,
+      pageSize, mode, family: fam,
       distDesigned,
       distSimulated: mode === 'DRY' ? distSimulated : distDesigned,
-      shapes: generateShapes(clamp(shapeCount, 3, 16), pageSize),
+      // Solo la familia "reacción" sortea figuras — "puntería" usa la
+      // silueta/zonas A/C/D fijas definidas en constants.js (ver
+      // drawIpscSilhouette/zoneAt más abajo), así que no necesita nada acá.
+      shapes: fam === 'reaction' ? generateShapes(clamp(shapeCount, 3, 16), pageSize) : [],
       createdAt: Date.now(),
     };
+  }
+
+  // ---- Puntería (estilo IPSC): geometría fija + hit-test de zonas ---------
+  function pointInEllipse(x, y, e) {
+    const dx = (x - e.cx) / e.rx, dy = (y - e.cy) / e.ry;
+    return dx * dx + dy * dy <= 1;
+  }
+  function pointInPolygon(x, y, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+      const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+  // Devuelve 'A' | 'C' | 'D' | null (null = fuera del blanco por completo).
+  // La cabeza cuenta como zona 'A' — simplificación deliberada (el blanco
+  // real de IPSC separa cabeza y torso con sus propias sub-zonas) para que
+  // esta primera versión tenga un hit-test simple y predecible.
+  function zoneAt(gx, gy) {
+    const h = IPSC_HEAD;
+    if ((gx - h.cx) * (gx - h.cx) + (gy - h.cy) * (gy - h.cy) <= h.r * h.r) return 'A';
+    if (pointInEllipse(gx, gy, IPSC_ZONE_A)) return 'A';
+    if (pointInEllipse(gx, gy, IPSC_ZONE_C)) return 'C';
+    if (pointInPolygon(gx, gy, IPSC_TORSO_POLY)) return 'D';
+    return null;
+  }
+
+  // sx/sy/originX/originY: same convention as drawShape — scale from grid
+  // units to canvas pixels, plus an origin offset (0,0 for the live/warped
+  // view, safeX/safeY for the print-preview canvas). outline=true draws
+  // stroke-only (silueta transparente) for overlaying on the live camera
+  // feed, same rationale as drawShape's outline mode.
+  function drawIpscSilhouette(ctx, sx, sy, originX, originY, outline) {
+    const toPx = (gx, gy) => [originX + gx * sx, originY + gy * sy];
+    ctx.save();
+    ctx.beginPath();
+    IPSC_TORSO_POLY.forEach((p, i) => {
+      const [px, py] = toPx(p.x, p.y);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    const [hx, hy] = toPx(IPSC_HEAD.cx, IPSC_HEAD.cy);
+    const headR = IPSC_HEAD.r * ((sx + sy) / 2);
+    if (outline) {
+      ctx.fillStyle = 'transparent';
+      ctx.strokeStyle = '#ff7a1a';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(hx, hy, headR, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#c9a876';
+      ctx.strokeStyle = '#3a3126';
+      ctx.lineWidth = 2;
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(hx, hy, headR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    // Líneas de zona A/C — punteadas, siempre visibles (aun en modo outline)
+    // para que el tirador vea contra qué zona se está evaluando cada
+    // disparo mientras entrena. Un blanco real de competencia no siempre
+    // las muestra así, pero para entrenar es más útil verlas.
+    const drawZoneEllipse = (e, dash, color) => {
+      const [ex, ey] = toPx(e.cx, e.cy);
+      ctx.save();
+      ctx.setLineDash(dash);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, e.rx * sx, e.ry * sy, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    };
+    drawZoneEllipse(IPSC_ZONE_C, [6, 4], outline ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.4)');
+    drawZoneEllipse(IPSC_ZONE_A, [3, 3], outline ? 'rgba(255,255,255,.8)' : 'rgba(0,0,0,.6)');
+    ctx.restore();
+  }
+
+  function ipscPdf(doc, safeX, safeY, sx, sy) {
+    const toXY = (gx, gy) => [safeX + gx * sx, safeY + gy * sy];
+    const pts = IPSC_TORSO_POLY.map(p => toXY(p.x, p.y));
+    const deltas = [];
+    for (let i = 1; i < pts.length; i++) deltas.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+    doc.setFillColor(201, 168, 118);
+    doc.setDrawColor(58, 49, 38);
+    doc.lines(deltas, pts[0][0], pts[0][1], [1, 1], 'FD', true);
+    const [hx, hy] = toXY(IPSC_HEAD.cx, IPSC_HEAD.cy);
+    doc.circle(hx, hy, IPSC_HEAD.r * ((sx + sy) / 2), 'FD');
+    doc.setDrawColor(120);
+    const [cx, cy] = toXY(IPSC_ZONE_C.cx, IPSC_ZONE_C.cy);
+    doc.setLineDashPattern([3, 2], 0);
+    doc.ellipse(cx, cy, IPSC_ZONE_C.rx * sx, IPSC_ZONE_C.ry * sy, 'D');
+    const [ax, ay] = toXY(IPSC_ZONE_A.cx, IPSC_ZONE_A.cy);
+    doc.setLineDashPattern([1.5, 1.5], 0);
+    doc.ellipse(ax, ay, IPSC_ZONE_A.rx * sx, IPSC_ZONE_A.ry * sy, 'D');
+    doc.setLineDashPattern([], 0);
   }
 
   // ---- Target Metatag: a real (if simple) identifying code, not just
@@ -241,7 +341,11 @@ const Target = (() => {
     drawFiducial(ctx, w - FIDUCIAL_MARGIN * sx, FIDUCIAL_MARGIN * sy, fid);
     drawFiducial(ctx, FIDUCIAL_MARGIN * sx, h - FIDUCIAL_MARGIN * sy, fid);
     drawFiducial(ctx, w - FIDUCIAL_MARGIN * sx, h - FIDUCIAL_MARGIN * sy, fid);
-    target.shapes.forEach(s => drawShape(ctx, s, sx, sy, 0, 0, outline));
+    if (target.family === 'ipsc') {
+      drawIpscSilhouette(ctx, sx, sy, 0, 0, outline);
+    } else {
+      target.shapes.forEach(s => drawShape(ctx, s, sx, sy, 0, 0, outline));
+    }
     ctx.restore();
   }
 
@@ -278,7 +382,11 @@ const Target = (() => {
     drawFiducial(ctx, safeX + fm * sx, safeY + safeH - fm * sy, fid);
     drawFiducial(ctx, safeX + safeW - fm * sx, safeY + safeH - fm * sy, fid);
 
-    target.shapes.forEach(s => drawShape(ctx, s, sx, sy, safeX, safeY));
+    if (target.family === 'ipsc') {
+      drawIpscSilhouette(ctx, sx, sy, safeX, safeY, false);
+    } else {
+      target.shapes.forEach(s => drawShape(ctx, s, sx, sy, safeX, safeY));
+    }
 
     const bits = metatagBits(target);
     const mz = METATAG_ZONE;
@@ -304,7 +412,7 @@ const Target = (() => {
 
   function toJson(t) {
     const spec = PAGE_SPECS[t.pageSize];
-    return {
+    const base = {
       metatag: {
         targetId: t.id,
         pageSize: t.pageSize,
@@ -314,12 +422,19 @@ const Target = (() => {
         simulatedDistanceM: t.mode === 'DRY' ? t.distSimulated : null,
       },
       grid: '1000x1000 normalized (post-homography)',
-      zones: t.shapes.map(s => ({
+    };
+    if (t.family === 'ipsc') {
+      base.targetType = 'puntería (silueta con zonas A/C/D, estilo competencia — no es un blanco oficial licenciado)';
+      base.zones = { head: IPSC_HEAD, zoneA: IPSC_ZONE_A, zoneC: IPSC_ZONE_C, silhouette: IPSC_TORSO_POLY };
+    } else {
+      base.targetType = 'reacción (formas/colores/números)';
+      base.zones = t.shapes.map(s => ({
         id: s.id, type: s.type, color: s.color, number: s.number,
         center: [Math.round(s.cx), Math.round(s.cy)],
         radius: Math.round(s.r),
-      })),
-    };
+      }));
+    }
+    return base;
   }
 
   // Real vector PDF export (jsPDF) at true physical scale — this is the file
@@ -356,25 +471,29 @@ const Target = (() => {
     fiducialPdf(safeX + fm * sx, safeY + spec.safeH - fm * sy, fid);
     fiducialPdf(safeX + spec.safeW - fm * sx, safeY + spec.safeH - fm * sy, fid);
 
-    const colorRgb = {
-      red: [229, 72, 77], blue: [74, 159, 224], yellow: [244, 196, 48], green: [69, 178, 107],
-    };
-    target.shapes.forEach(s => {
-      const px = safeX + s.cx * sx, py = safeY + s.cy * sy;
-      const r = s.r * ((sx + sy) / 2);
-      const rgb = colorRgb[s.color];
-      doc.setFillColor(rgb[0], rgb[1], rgb[2]);
-      if (s.type === 'circle') {
-        doc.circle(px, py, r, 'F');
-      } else if (s.type === 'square') {
-        doc.rect(px - r * 0.85, py - r * 0.85, r * 1.7, r * 1.7, 'F');
-      } else {
-        doc.triangle(px, py - r, px + r * 0.95, py + r * 0.8, px - r * 0.95, py + r * 0.8, 'F');
-      }
-      doc.setFontSize(r * 1.6);
-      doc.setTextColor(255, 255, 255);
-      doc.text(String(s.number), px, py + r * 0.12, { align: 'center' });
-    });
+    if (target.family === 'ipsc') {
+      ipscPdf(doc, safeX, safeY, sx, sy);
+    } else {
+      const colorRgb = {
+        red: [229, 72, 77], blue: [74, 159, 224], yellow: [244, 196, 48], green: [69, 178, 107],
+      };
+      target.shapes.forEach(s => {
+        const px = safeX + s.cx * sx, py = safeY + s.cy * sy;
+        const r = s.r * ((sx + sy) / 2);
+        const rgb = colorRgb[s.color];
+        doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+        if (s.type === 'circle') {
+          doc.circle(px, py, r, 'F');
+        } else if (s.type === 'square') {
+          doc.rect(px - r * 0.85, py - r * 0.85, r * 1.7, r * 1.7, 'F');
+        } else {
+          doc.triangle(px, py - r, px + r * 0.95, py + r * 0.8, px - r * 0.95, py + r * 0.8, 'F');
+        }
+        doc.setFontSize(r * 1.6);
+        doc.setTextColor(255, 255, 255);
+        doc.text(String(s.number), px, py + r * 0.12, { align: 'center' });
+      });
+    }
 
     const bits = metatagBits(target);
     const mz = METATAG_ZONE;
@@ -406,5 +525,6 @@ const Target = (() => {
   return {
     generateShapes, equationForNumber, build, metatagBits, encodeBits, decodeBits,
     drawFiducial, drawShape, drawGrid, drawPrintPreview, toJson, exportPdf,
+    zoneAt, drawIpscSilhouette,
   };
 })();

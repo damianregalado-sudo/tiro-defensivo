@@ -11,6 +11,12 @@ const DryFire = (() => {
   let target = null;
   let laserColor = 'red';
   let drill = null;
+  // Sesión de puntería (blanco family==='ipsc'): sin consigna ni tiempo, solo
+  // registra cada disparo detectado y en qué zona (A/C/D/fuera) cayó. Vive en
+  // paralelo a `drill` (nunca los dos activos a la vez — ensureScope() los
+  // resetea al cambiar de blanco) y reusa el MISMO detector/armado de láser
+  // que el drill de reacción — ver el bloque "gate" en onVisionFrame.
+  let punteria = null;
   let cameraOn = false;
   let currentFrameMat = null; // last LOCKED frame's cv.Mat, owned by us — must delete() each frame
 
@@ -194,6 +200,15 @@ const DryFire = (() => {
     if (!target) return;
     $('#dryEmpty').style.display = 'none';
     $('#drySide').style.display = 'flex';
+    // Un blanco nuevo (o un cambio de familia) cierra cualquier drill/sesión
+    // de puntería que hubiera quedado activa del blanco anterior.
+    drill = null;
+    punteria = null;
+    const isIpsc = target.family === 'ipsc';
+    $('#drySideReaction').style.display = isIpsc ? 'none' : '';
+    $('#drySideIpsc').style.display = isIpsc ? '' : 'none';
+    $('#dryPrompt').style.display = 'none';
+    resetPunteriaUi();
     const wrap = $('#dryScopeWrap');
     wrap.innerHTML = `
       <div class="scope-hud">
@@ -234,8 +249,103 @@ const DryFire = (() => {
     $('#btnLock').disabled = false;
     $('#btnLock').textContent = 'Activar cámara';
     $('#btnStartDrill').disabled = true;
+    $('#btnStartPunteria').disabled = true;
     wireZoomControls('dry');
     $('#dryDebugToggle').addEventListener('click', toggleDebug);
+  }
+
+  // ---- Puntería (blanco family==='ipsc'): sesión continua sin consigna ----
+  function resetPunteriaUi() {
+    $('#btnStartPunteria').style.display = '';
+    $('#btnNewPunteriaSerie').style.display = 'none';
+    $('#btnStopPunteria').style.display = 'none';
+    $('#punteriaLogBody').innerHTML = '';
+    $('#statPunteriaShots').textContent = '0';
+    $('#statPunteriaA').textContent = '0';
+    $('#statPunteriaC').textContent = '0';
+    $('#statPunteriaD').textContent = '0';
+    $('#statPunteriaMiss').textContent = '0';
+  }
+
+  function startPunteria() {
+    punteria = { active: true, shots: [], tally: { A: 0, C: 0, D: 0, miss: 0 }, seriesCount: 0 };
+    $('#btnStartPunteria').style.display = 'none';
+    $('#btnNewPunteriaSerie').style.display = '';
+    $('#btnStopPunteria').style.display = '';
+    $('#punteriaLogBody').innerHTML = '';
+    updatePunteriaStats();
+  }
+
+  // Persiste la serie actual en el historial (tm_punteria_history, compartido
+  // con Fuego Real — ver livefire.js) y arranca una serie nueva sin cerrar la
+  // sesión ni apagar la cámara — mismo concepto que "Nuevo grupo" en Fuego Real.
+  function newPunteriaSerie() {
+    if (!punteria) return;
+    if (punteria.shots.length) logPunteriaSerie();
+    punteria.shots = [];
+    punteria.tally = { A: 0, C: 0, D: 0, miss: 0 };
+    drawOverlay();
+    updatePunteriaStats();
+  }
+
+  function stopPunteria() {
+    if (punteria && punteria.shots.length) logPunteriaSerie();
+    punteria = null;
+    resetPunteriaUi();
+    drawOverlay();
+  }
+
+  function logPunteriaSerie() {
+    const t = punteria.tally;
+    const hist = Storage.get('tm_punteria_history', []);
+    hist.unshift({ date: new Date().toISOString(), mode: 'DRY', shots: punteria.shots.length, a: t.A, c: t.C, d: t.D, miss: t.miss });
+    Storage.set('tm_punteria_history', hist.slice(0, 100));
+    App.renderHistory();
+    punteria.seriesCount++;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${punteria.seriesCount}</td><td>${punteria.shots.length}</td><td>${t.A}</td><td>${t.C}</td><td>${t.D}</td><td>${t.miss}</td>`;
+    $('#punteriaLogBody').prepend(tr);
+  }
+
+  function registerPunteriaHit(gx, gy, source) {
+    if (!punteria || !punteria.active) return;
+    const zone = Target.zoneAt(gx, gy);
+    const key = zone || 'miss';
+    punteria.shots.push({ gx, gy, zone, source });
+    punteria.tally[key] = (punteria.tally[key] || 0) + 1;
+    drawOverlay();
+    updatePunteriaStats();
+  }
+
+  function updatePunteriaStats() {
+    if (!punteria) return;
+    $('#statPunteriaShots').textContent = punteria.shots.length;
+    $('#statPunteriaA').textContent = punteria.tally.A;
+    $('#statPunteriaC').textContent = punteria.tally.C;
+    $('#statPunteriaD').textContent = punteria.tally.D;
+    $('#statPunteriaMiss').textContent = punteria.tally.miss;
+  }
+
+  // Color por zona — mismo esquema que usa livefire.js para sus impactos,
+  // así el criterio visual (verde=A, amarillo=C, naranja=D, rojo=fuera) es
+  // consistente entre Fuego Seco y Fuego Real.
+  function drawZoneMarker(ctx, px, py, zone, idx) {
+    const color = zone === 'A' ? '#45b26b' : zone === 'C' ? '#f4c430' : zone === 'D' ? '#ff7a1a' : '#e5484d';
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py, 13, 0, Math.PI * 2); ctx.stroke();
+    if (idx !== undefined) {
+      ctx.fillStyle = 'rgba(0,0,0,.75)';
+      ctx.beginPath(); ctx.arc(px + 16, py - 16, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(zone || 'X', px + 16, py - 15);
+      ctx.textAlign = 'left';
+    }
+    ctx.restore();
   }
 
   function toggleDebug() {
@@ -296,6 +406,7 @@ const DryFire = (() => {
   function stopCamera() {
     Vision.stop();
     cameraOn = false;
+    if (punteria) stopPunteria();
     $('#dryLockedWrap') && ($('#dryLockedWrap').style.display = 'none');
     $('#drySearchWrap') && ($('#drySearchWrap').style.display = 'none');
     $('#dryZoomCtrl') && ($('#dryZoomCtrl').style.display = 'none');
@@ -304,6 +415,7 @@ const DryFire = (() => {
     $('#dryRecogState') && ($('#dryRecogState').style.display = 'none');
     recognizeAttempts = 0; recognizeDone = false;
     $('#btnStartDrill').disabled = true;
+    $('#btnStartPunteria').disabled = true;
     $('#dryDebugPanel') && ($('#dryDebugPanel').textContent = '');
   }
 
@@ -408,6 +520,7 @@ const DryFire = (() => {
       $('#dryHudCam').textContent = 'BLOQUEADO · calibrado';
       $('#dryHudCam').className = 'pill success';
       $('#btnStartDrill').disabled = false;
+      $('#btnStartPunteria').disabled = false;
       $('#btnLock').textContent = 'Re-calibrar';
       recognizeAttempts = 0;
       recognizeDone = false;
@@ -421,7 +534,15 @@ const DryFire = (() => {
 
     attemptRecognition();
 
-    if (drill && (drill.state === 'PROMPT' || drill.state === 'AWAIT') && currentFrameMat) {
+    // Puntería (family==='ipsc') reusa el MISMO gate armado/confirmado que el
+    // drill de reacción de abajo — la única diferencia es que no hay
+    // estados PROMPT/AWAIT que abran la ventana: una sesión de puntería
+    // activa está "escuchando" todo el tiempo, así que la condición para
+    // correr el detector es simplemente "hay sesión activa" en vez de "el
+    // drill está en AWAIT".
+    const reactionGateOpen = drill && (drill.state === 'PROMPT' || drill.state === 'AWAIT');
+    const punteriaGateOpen = punteria && punteria.active;
+    if ((reactionGateOpen || punteriaGateOpen) && currentFrameMat) {
       const hit = Vision.detectLaserInMat(currentFrameMat, laserColor);
       lastRawHit = debugOn && hit ? { gx: hit.gx, gy: hit.gy } : null;
       const isOn = !!hit;
@@ -439,8 +560,12 @@ const DryFire = (() => {
       // now been seen on for LASER_CONFIRM_ON_FRAMES frame(s) (currently
       // just 1 — see the comment above on why requiring more than that
       // rejects real single-flash laser rounds). See the two comments above.
-      if (drill.state === 'AWAIT' && !drill.hitRegistered && laserArmed && isOn && laserOnStreak >= LASER_CONFIRM_ON_FRAMES) {
+      const canFire = laserArmed && isOn && laserOnStreak >= LASER_CONFIRM_ON_FRAMES;
+      if (reactionGateOpen && drill.state === 'AWAIT' && !drill.hitRegistered && canFire) {
         registerHit(hit.gx, hit.gy, 'camera');
+        laserArmed = false;
+      } else if (punteriaGateOpen && canFire) {
+        registerPunteriaHit(hit.gx, hit.gy, 'camera');
         laserArmed = false;
       }
       if (isOn) laserOffStreak = 0;
@@ -492,9 +617,9 @@ const DryFire = (() => {
         // UN DISPARO" with no hit marker appearing is the gate correctly
         // rejecting single-frame noise, not a bug — this line exists so
         // that's visible in the recording itself instead of ambiguous.
-        const gateNote = drill
-          ? `condición para contar el disparo: armado=${laserArmed ? 'sí' : 'no'} · racha encendido=${laserOnStreak}/${LASER_CONFIRM_ON_FRAMES} · racha apagado=${laserOffStreak}/${LASER_ARM_OFF_FRAMES}${drill.hitRegistered ? ' · ronda YA registró disparo' : ''}`
-          : 'condición para contar el disparo: sin drill activo — este panel solo muestra la lectura cruda';
+        const gateNote = (drill || punteria)
+          ? `condición para contar el disparo: armado=${laserArmed ? 'sí' : 'no'} · racha encendido=${laserOnStreak}/${LASER_CONFIRM_ON_FRAMES} · racha apagado=${laserOffStreak}/${LASER_ARM_OFF_FRAMES}${drill && drill.hitRegistered ? ' · ronda YA registró disparo' : ''}${punteria ? ' · sesión de puntería activa (sin rondas)' : ''}`
+          : 'condición para contar el disparo: sin drill ni sesión de puntería activa — este panel solo muestra la lectura cruda';
         renderDebugPanel(
           (expNote ? expNote + '\n' : '') +
           (zoomNote ? zoomNote + '\n' : '') +
@@ -571,6 +696,12 @@ const DryFire = (() => {
         drawHitMarker(ctx, px, py, m.color, m.ok, i === lastIdx ? m.snapshot : null, m.round);
       });
     }
+    if (punteria && punteria.shots.length) {
+      punteria.shots.forEach((s, i) => {
+        const px = s.gx / GRID * overlay.width, py = s.gy / GRID * overlay.height;
+        drawZoneMarker(ctx, px, py, s.zone, i + 1);
+      });
+    }
   }
 
   // Small, live, one-frame-at-a-time marker showing exactly where the RAW
@@ -644,13 +775,13 @@ const DryFire = (() => {
   }
 
   function onManualClick(e) {
-    if (!drill || drill.state !== 'AWAIT' || drill.hitRegistered) return;
     const overlay = $('#dryOverlay');
     const rect = overlay.getBoundingClientRect();
     const px = (e.clientX - rect.left) * (overlay.width / rect.width);
     const py = (e.clientY - rect.top) * (overlay.height / rect.height);
     const gx = px / overlay.width * GRID, gy = py / overlay.height * GRID;
-    registerHit(gx, gy, 'manual');
+    if (drill && drill.state === 'AWAIT' && !drill.hitRegistered) { registerHit(gx, gy, 'manual'); return; }
+    if (punteria && punteria.active) { registerPunteriaHit(gx, gy, 'manual'); }
   }
 
   function findShapeAt(gx, gy) {
@@ -923,14 +1054,17 @@ const DryFire = (() => {
     // the first case, and left the bar showing on every OTHER tab too.
     if (side.style.display === 'none' || side.offsetParent === null) { bar.style.display = 'none'; return; }
     const stopBtn = $('#btnStopDrill'), startBtn = $('#btnStartDrill'), lockBtn = $('#btnLock');
-    // #btnStartDrill stays visible (just disabled) the whole time the
-    // camera isn't locked yet — style.display alone can't tell "ready to
-    // start a drill" apart from "still need to activate/calibrate the
-    // camera first". Only treat it as the current action once it's actually
-    // enabled; otherwise the real next step is still #btnLock.
+    const stopPunteriaBtn = $('#btnStopPunteria'), startPunteriaBtn = $('#btnStartPunteria');
+    // #btnStartDrill/#btnStartPunteria stay visible (just disabled) the
+    // whole time the camera isn't locked yet — style.display alone can't
+    // tell "ready to start" apart from "still need to activate/calibrate
+    // the camera first". Only treat one as the current action once it's
+    // actually enabled; otherwise the real next step is still #btnLock.
     let mirror = null;
     if (stopBtn && stopBtn.style.display !== 'none') mirror = stopBtn;
+    else if (stopPunteriaBtn && stopPunteriaBtn.style.display !== 'none') mirror = stopPunteriaBtn;
     else if (startBtn && startBtn.style.display !== 'none' && !startBtn.disabled) mirror = startBtn;
+    else if (startPunteriaBtn && startPunteriaBtn.style.display !== 'none' && !startPunteriaBtn.disabled) mirror = startPunteriaBtn;
     else if (lockBtn) mirror = lockBtn;
     if (!mirror) { bar.style.display = 'none'; return; }
     // NOT '' — the bar's CSS default is display:none (see .cta-bar in
@@ -944,7 +1078,7 @@ const DryFire = (() => {
   }
   function setupCtaBar() {
     if (ctaObserverSet) { ctaSync(); return; }
-    const targets = [$('#btnLock'), $('#btnStartDrill'), $('#btnStopDrill'), $('#drySide')].filter(Boolean);
+    const targets = [$('#btnLock'), $('#btnStartDrill'), $('#btnStopDrill'), $('#btnStartPunteria'), $('#btnStopPunteria'), $('#drySide')].filter(Boolean);
     if (!targets.length) return;
     const obs = new MutationObserver(ctaSync);
     targets.forEach(t => obs.observe(t, { attributes: true, attributeFilter: ['style', 'disabled', 'class'] }));
@@ -957,5 +1091,6 @@ const DryFire = (() => {
     setAudioCuesOn, setCueOrder, setDifficulty,
     getAudioCuesOn: () => audioCuesOn, getCueOrder: () => cueOrder, getDifficulty,
     setupCtaBar,
+    startPunteria, newPunteriaSerie, stopPunteria,
   };
 })();

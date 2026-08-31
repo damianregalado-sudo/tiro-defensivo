@@ -11,6 +11,10 @@ const LiveFire = (() => {
   let cameraOn = false;
   let referenceGray = null;
   let shots = []; // {px,py} in warp-canvas pixel space
+  // Solo se usa cuando target.family==='ipsc' — tally de en qué zona (A/C/D)
+  // cayó cada impacto detectado, además del cálculo de MOA/agrupamiento que
+  // ya corre igual para cualquier familia de blanco (ver currentMoaStats).
+  let zoneTally = null;
   let holeCandidate = null; // {gx,gy,count} — requires N stable frames before committing
   let ignoreCanvas = null, ignoreCtx = null;
   let currentFrameMat = null;
@@ -35,6 +39,9 @@ const LiveFire = (() => {
     $('#liveEmpty').style.display = 'none';
     $('#liveSide').style.display = 'flex';
     shots = []; referenceGray = null; holeCandidate = null;
+    zoneTally = target.family === 'ipsc' ? { A: 0, C: 0, D: 0, miss: 0 } : null;
+    $('#liveStatsReaction').style.display = target.family === 'ipsc' ? 'none' : '';
+    $('#liveStatsIpsc').style.display = target.family === 'ipsc' ? '' : 'none';
     const wrap = $('#liveScopeWrap');
     wrap.innerHTML = `
       <div class="scope-hud">
@@ -293,7 +300,16 @@ const LiveFire = (() => {
       ctx.save();
       ctx.fillStyle = '#111';
       ctx.beginPath(); ctx.arc(hole.px, hole.py, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.stroke();
+      // Anillo coloreado por zona (A/C/D/fuera) cuando el blanco es
+      // family==='ipsc' — mismo esquema de color que usa drill.js para que
+      // sea consistente entre Fuego Seco y Fuego Real.
+      if (hole.zone !== undefined) {
+        ctx.strokeStyle = hole.zone === 'A' ? '#45b26b' : hole.zone === 'C' ? '#f4c430' : hole.zone === 'D' ? '#ff7a1a' : '#e5484d';
+        ctx.lineWidth = 2;
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1;
+      }
+      ctx.stroke();
       ctx.restore();
     });
     if (shots.length) {
@@ -315,7 +331,15 @@ const LiveFire = (() => {
   }
 
   function registerShot(px, py, source) {
-    shots.push({ px, py, source });
+    const shot = { px, py, source };
+    if (zoneTally) {
+      const gx = px / Vision.WARP_W * GRID, gy = py / Vision.WARP_H * GRID;
+      const zone = Target.zoneAt(gx, gy);
+      shot.zone = zone;
+      const key = zone || 'miss';
+      zoneTally[key] = (zoneTally[key] || 0) + 1;
+    }
+    shots.push(shot);
     // mark this spot in the ignore mask so camera detection won't re-fire on it
     ignoreCtx.fillStyle = '#fff';
     ignoreCtx.beginPath(); ignoreCtx.arc(px, py, 16, 0, Math.PI * 2); ignoreCtx.fill();
@@ -359,8 +383,17 @@ const LiveFire = (() => {
   }
 
   function updateStats() {
-    $('#statShots').textContent = shots.length;
     const stats = currentMoaStats();
+    if (zoneTally) {
+      $('#statShotsIpsc').textContent = shots.length;
+      $('#statLiveA').textContent = zoneTally.A;
+      $('#statLiveC').textContent = zoneTally.C;
+      $('#statLiveD').textContent = zoneTally.D;
+      $('#statLiveMiss').textContent = zoneTally.miss;
+      $('#statMoaIpsc').textContent = stats ? stats.moa.toFixed(2) + ' MOA' : '—';
+      return;
+    }
+    $('#statShots').textContent = shots.length;
     if (!stats) {
       $('#statSpread').textContent = shots.length ? '1 impacto' : '—';
       $('#statMpi').textContent = '—';
@@ -376,15 +409,27 @@ const LiveFire = (() => {
   function newGroup() {
     const stats = currentMoaStats();
     if (shots.length) {
-      const hist = Storage.get('tm_live_history', []);
-      hist.unshift({ date: new Date().toISOString(), distance: parseFloat($('#liveDistance').value) || 15, shots: shots.length, moa: stats ? stats.moa : 0 });
-      Storage.set('tm_live_history', hist.slice(0, 100));
-      App.renderHistory();
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${Storage.get('tm_live_history', []).length}</td><td>${(parseFloat($('#liveDistance').value) || 15)}m</td><td>${shots.length}</td><td>${stats ? stats.moa.toFixed(2) : '—'}</td>`;
-      $('#liveLogBody').prepend(tr);
+      const distance = parseFloat($('#liveDistance').value) || 15;
+      if (zoneTally) {
+        const hist = Storage.get('tm_punteria_history', []);
+        hist.unshift({ date: new Date().toISOString(), mode: 'LIVE', shots: shots.length, a: zoneTally.A, c: zoneTally.C, d: zoneTally.D, miss: zoneTally.miss, moa: stats ? stats.moa : 0, distance });
+        Storage.set('tm_punteria_history', hist.slice(0, 100));
+        App.renderHistory();
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${Storage.get('tm_punteria_history', []).length}</td><td>${distance}m</td><td>${shots.length}</td><td>${zoneTally.A}</td><td>${zoneTally.C}</td><td>${zoneTally.D}</td><td>${zoneTally.miss}</td>`;
+        $('#punteriaLiveLogBody').prepend(tr);
+      } else {
+        const hist = Storage.get('tm_live_history', []);
+        hist.unshift({ date: new Date().toISOString(), distance, shots: shots.length, moa: stats ? stats.moa : 0 });
+        Storage.set('tm_live_history', hist.slice(0, 100));
+        App.renderHistory();
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${Storage.get('tm_live_history', []).length}</td><td>${distance}m</td><td>${shots.length}</td><td>${stats ? stats.moa.toFixed(2) : '—'}</td>`;
+        $('#liveLogBody').prepend(tr);
+      }
     }
     shots = [];
+    if (zoneTally) zoneTally = { A: 0, C: 0, D: 0, miss: 0 };
     ignoreCtx.fillStyle = '#000'; ignoreCtx.fillRect(0, 0, ignoreCanvas.width, ignoreCanvas.height);
     if (currentFrameMat) referenceGray = Vision.grayFromMat(currentFrameMat);
     drawOverlay();

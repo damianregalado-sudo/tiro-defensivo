@@ -32,6 +32,11 @@ local) y Chromium descargado (`npx playwright install chromium`).
 - `flashScreen()` (el flash verde/rojo de pantalla completa del drill de
   Fuego Seco) sube y baja la opacidad del overlay `#screenFlash` como se
   espera.
+- `Target.zoneAt()` (blanco de puntería estilo IPSC, desde el build .14)
+  clasifica bien un punto en cada zona conocida (cabeza/A, torso/D, afuera).
+- Elegir la familia "Puntería (estilo IPSC)" en el generador cambia la UI
+  correctamente (oculta lo que no aplica, muestra la nota aclaratoria) sin
+  errores de consola, y el blanco generado dibuja algo real en el preview.
 
 ## Lo que NO prueba (y por qué)
 
