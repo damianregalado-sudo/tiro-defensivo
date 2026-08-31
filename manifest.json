@@ -1,7 +1,7 @@
 {
-  "name": "TargetMind",
-  "short_name": "TargetMind",
-  "description": "Entrenamiento de tiro con arma láser: checklist de seguridad, generador de blancos y cámara con auto-lock.",
+  "name": "Entrena Tiro",
+  "short_name": "Entrena Tiro",
+  "description": "Entrenamiento de tiro con arma láser: chequeo de seguridad, generador de blancos y cámara con bloqueo automático.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -1,4 +1,6 @@
-# TargetMind — app web
+# Entrena Tiro — app web
+
+*(antes "TargetMind" — se renombró en el build 2026-08-28.12, sin cambiar la carpeta/repo `targetmind-web`.)*
 
 App de entrenamiento con arma láser: checklist de seguridad no salteable, generador de blancos vectoriales (PDF real), y cámara con detección automática de anclajes + homografía para los modos de fuego seco y fuego real.
 
@@ -281,6 +283,34 @@ También agregué el flash de pantalla completa que pediste: **verde** en el ins
 *Nota honesta*: verificado con pruebas automatizadas (Playwright, sin cámara) que los dos elementos técnicos ya no aparecen en el texto visible de la página, que el botón "Ver JSON" ya no existe, y que la función `flashScreen()` sube y baja la opacidad del overlay como se espera al llamarla con cada color. Lo que no pude verificar sin tu teléfono es cómo se ve/siente el flash en la práctica — duración, intensidad, si se nota bien con el sol pegándole a la pantalla, etc. — así que la duración (verde: instantáneo y breve: rojo: un poco más largo, 450ms) es un punto de partida a ajustar según lo que veas.
 
 *Nota sobre la suite de tests*: esta sesión arrancó en un contenedor nuevo (se perdió el acceso directo a GitHub de la sesión anterior) y con eso se perdieron los 21 tests Playwright acumulados en builds previos — no viven en el repo, así que no había forma de recuperarlos. Escribí un test nuevo y más chico enfocado solo en lo que cambia en este build; los 21 anteriores no se volvieron a correr contra este build. Si en algún momento el conjunto de tests es algo que te importa conservar entre sesiones, lo ideal sería que vivan dentro del repo (una carpeta `tests/`) en vez de en `/tmp` de la sesión de turno.
+
+**Build 2026-08-28.12 — la app se renombró a "Entrena Tiro" y se tradujo todo lo que quedaba en inglés.**
+
+Pediste que la app quede 100% en castellano, porque en inglés ya hay muchas apps de este tipo y hay tiradores en Argentina a los que el inglés técnico no les resulta claro. También me pediste una traducción/nombre en castellano para "TargetMind" — te propuse "Tiro Cognitivo", "Tiro Mental" y "Entrena Tiro"; elegiste **"Entrena Tiro"**, y quedó aplicado en todos lados: título de la pestaña del navegador, encabezado de la app, `manifest.json` (nombre corto y largo, para cuando se instala como PWA), pie del PDF exportado del blanco, nombre del archivo PDF descargado (`entrenatiro_...pdf` en vez de `targetmind_...pdf`), el service worker (nombre interno de la caché) y este README. La carpeta/repo sigue llamándose `targetmind-web` — cambiar eso significa mover el repo entero en GitHub, así que lo dejamos para cuando decidas si también querés renombrar el repo.
+
+Barrí toda la app buscando texto en inglés que hubiera quedado suelto entre bambalinas de builds anteriores (mensajes de estado, encabezados de tabla, textos de botones) y encontré varios que no eran evidentes a simple vista:
+
+- El estado de seguridad decía literalmente `SAFETY GATE: LOCKED` / `SafetyState.LOCKED` / `SafetyState.ARMED` en la pantalla — ahora dice `ESTADO DE SEGURIDAD: BLOQUEADO` / `EstadoSeguridad.BLOQUEADO` / `EstadoSeguridad.ARMADO`.
+- El encabezado "Safety Gate — antes de empezar" pasó a "Control de seguridad — antes de empezar".
+- Las tablas de registro y de historial tenían encabezados en inglés (`Prompt`, `RT`, `RT prom.`) — ahora dicen `Consigna`, `T. Reac.`, `T. Reac. prom.`. La columna de resultado por ronda usaba `OK`/`ERR` como texto — ahora usa `✔`/`✘`.
+- La cámara mostraba `LOCKED` como palabra suelta en el HUD y en las alertas ("Esperá a que la cámara esté LOCKED") — ahora dice `BLOQUEADO` y "Esperá a que la cámara esté BLOQUEADA sobre el blanco".
+- Los mensajes sobre el código óptico del blanco decían "Metatag leído..." / "No se pudo leer el metatag..." — pasaron a "Código óptico leído..." / "No se pudo leer el código óptico...", más claro para alguien que no sabe qué es un "metatag".
+- La palabra "checklist" se usaba como préstamo del inglés en varios lugares visibles (descripción de la app, texto de la pestaña de seguridad, botón "Reiniciar checklist") — se tradujo a "lista de verificación" (y el botón quedó como "Reiniciar pasos", más corto y más claro sobre lo que hace).
+- La descripción de la app (la que usa el navegador/buscador, y la de `manifest.json` cuando se instala como PWA) usaba "auto-lock" — pasó a "calibrado y bloqueo automáticos" / "bloqueo automático".
+
+Aparte de la traducción, encontré y arreglé un bug real revisando `js/target.js`: el PDF exportado del blanco imprimía en el pie de página, sobre el papel físico, el valor crudo en inglés (`TargetMind · ... · DRY · ...`) en vez de un texto legible — ahora dice `Entrena Tiro · ... · FUEGO SECO · ...` (o `FUEGO REAL` según el modo).
+
+Los identificadores internos del código (nombres de funciones, de variables, de estados como `'LOCKED'`/`'ARMED'` dentro del JavaScript) se dejaron en inglés a propósito — no los ve nadie que no abra el código fuente, así que traducirlos no cambia nada para vos y sí agrega riesgo de romper algo por error de tipeo.
+
+*Nota honesta*: verificado con pruebas automatizadas (Playwright) que el título de la página es "Entrena Tiro", que no queda ningún rastro visible de "TargetMind" en el texto de la app, y que ninguna de las palabras sueltas en inglés detectadas (`LOCKED`, `ARMED`, `SafetyState`, `Safety Gate`, `Prompt`, `checklist`, `Checklist`) sigue apareciendo en el texto visible. También re-generé las 9 capturas de pantalla del flujo completo (seguridad → generador de blanco → blancos guardados → Fuego Seco → Fuego Real → historial) y las revisé una por una a simple vista — así encontré el encabezado "Safety Gate" y las columnas de tabla, que el barrido automático de texto no había marcado por buscar frases distintas. Lo que **no pude verificar en este entorno** es el arreglo del pie del PDF: la librería que genera el PDF (`jsPDF`) se carga desde una CDN externa que está bloqueada por política de red de este entorno de desarrollo, así que no pude generar un PDF real acá — reviso el cambio en el código y estoy seguro de que el texto que imprime es correcto, pero no lo vi salir en un PDF de verdad. Cuando lo descargues, fijate que el pie diga "Entrena Tiro" y "FUEGO SECO"/"FUEGO REAL", no "DRY"/"LIVE".
+
+*Para vos*: si ya instalaste la app anterior en la pantalla de inicio del celular (ícono "TargetMind"), ese ícono no se va a renombrar solo — hay que sacarlo y volver a agregarlo desde el navegador para que aparezca como "Entrena Tiro".
+
+**Build 2026-08-28.13 — ajuste de terminología: "checklist" pasó a "chequeo de seguridad" en vez de "lista de verificación".**
+
+En el build anterior había traducido "checklist" como "lista de verificación" en los tres lugares donde aparecía visible (descripción de la app, texto de la pestaña de seguridad, descripción del modo Fuego Seco). Preferiste "chequeo de seguridad", así que quedó así en los tres: la descripción de la app (tanto en el navegador como en `manifest.json`), el párrafo "El chequeo de seguridad depende de qué vas a practicar..." en la pestaña de Seguridad, y "Chequeo de armado seguro del entrenador" en la tarjeta de Fuego Seco. El botón "Reiniciar pasos" no lo toqué porque ya no usaba la palabra "checklist" ni "lista".
+
+*Nota honesta*: verificado con la suite de pruebas automatizadas (Playwright) que el badge de build dice `.13` y que ninguna de las palabras sueltas en inglés/préstamos detectadas hasta ahora sigue apareciendo en el texto visible.
 
 ## Estructura del proyecto
 

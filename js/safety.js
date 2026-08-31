@@ -77,7 +77,7 @@ const Safety = (() => {
       const track = $('.slider-track', step);
       if (i === 0 || state[i - 1]) { step.classList.remove('locked'); if (!state[i]) track.classList.remove('locked'); }
     }
-    $('#gateState').textContent = `${completed} / 4 pasos completados — SafetyState.${completed === 4 ? 'ARMED (pendiente confirmar)' : 'LOCKED'}`;
+    $('#gateState').textContent = `${completed} / 4 pasos completados — EstadoSeguridad.${completed === 4 ? 'ARMADO (pendiente confirmar)' : 'BLOQUEADO'}`;
     $('#gateDot').classList.toggle('on', completed === 4);
     $('#btnArm').disabled = completed !== 4;
     renderProgress(completed);

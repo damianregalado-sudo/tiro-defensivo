@@ -398,9 +398,9 @@ const Target = (() => {
 
     doc.setFontSize(7);
     doc.setTextColor(140);
-    doc.text(`TargetMind · ${spec.label} · ${target.mode} · dist. ${target.mode === 'DRY' ? target.distSimulated + 'm sim (' + target.distDesigned + 'm real)' : target.distDesigned + 'm'}`, spec.pageW / 2, spec.pageH - 4, { align: 'center' });
+    doc.text(`Entrena Tiro · ${spec.label} · ${target.mode === 'DRY' ? 'FUEGO SECO' : 'FUEGO REAL'} · dist. ${target.mode === 'DRY' ? target.distSimulated + 'm sim (' + target.distDesigned + 'm real)' : target.distDesigned + 'm'}`, spec.pageW / 2, spec.pageH - 4, { align: 'center' });
 
-    doc.save(`targetmind_${target.pageSize.toLowerCase()}_${target.mode.toLowerCase()}.pdf`);
+    doc.save(`entrenatiro_${target.pageSize.toLowerCase()}_${target.mode.toLowerCase()}.pdf`);
   }
 
   return {

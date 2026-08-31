@@ -405,7 +405,7 @@ const DryFire = (() => {
       const overlay = $('#dryOverlay');
       overlay.width = Vision.WARP_W; overlay.height = Vision.WARP_H;
       overlay.addEventListener('click', onManualClick);
-      $('#dryHudCam').textContent = 'LOCKED · calibrado';
+      $('#dryHudCam').textContent = 'BLOQUEADO · calibrado';
       $('#dryHudCam').className = 'pill success';
       $('#btnStartDrill').disabled = false;
       $('#btnLock').textContent = 'Re-calibrar';
@@ -493,12 +493,12 @@ const DryFire = (() => {
         // rejecting single-frame noise, not a bug — this line exists so
         // that's visible in the recording itself instead of ambiguous.
         const gateNote = drill
-          ? `gate (lo que realmente decide si cuenta): armado=${laserArmed ? 'sí' : 'no'} · racha ON=${laserOnStreak}/${LASER_CONFIRM_ON_FRAMES} · racha OFF=${laserOffStreak}/${LASER_ARM_OFF_FRAMES}${drill.hitRegistered ? ' · ronda YA registró disparo' : ''}`
-          : 'gate: sin drill activo — este panel solo muestra la lectura cruda';
+          ? `condición para contar el disparo: armado=${laserArmed ? 'sí' : 'no'} · racha encendido=${laserOnStreak}/${LASER_CONFIRM_ON_FRAMES} · racha apagado=${laserOffStreak}/${LASER_ARM_OFF_FRAMES}${drill.hitRegistered ? ' · ronda YA registró disparo' : ''}`
+          : 'condición para contar el disparo: sin drill activo — este panel solo muestra la lectura cruda';
         renderDebugPanel(
           (expNote ? expNote + '\n' : '') +
           (zoomNote ? zoomNote + '\n' : '') +
-          `LOCKED — láser ${d.colorId === 'green' ? 'verde' : 'rojo'} · apuntá y mirá estos valores en vivo:\n` +
+          `BLOQUEADO — láser ${d.colorId === 'green' ? 'verde' : 'rojo'} · apuntá y mirá estos valores en vivo:\n` +
           `  brillo máximo (escala de grises): ${d.maxBrightness.toFixed(0)} / necesita ≥${d.requiredBrightness}  ${passB ? '✓' : '✗'}\n` +
           `  contraste local (destello): ${d.maxLocalContrast.toFixed(0)} / necesita ≥${d.requiredLocalContrast}  ${passC ? '✓' : '✗'}\n` +
           `  color (chequeo suelto, no decide solo): canal 1 ${d.maxMargin1.toFixed(0)}/≥${d.requiredMargin} ${pass1 ? '✓' : '✗'} · canal 2 ${d.maxMargin2.toFixed(0)}/≥${d.requiredMargin} ${pass2 ? '✓' : '✗'}\n` +
@@ -532,14 +532,14 @@ const DryFire = (() => {
         pill.textContent = `Blanco reconocido: ${result.rec.name}`;
       } else if (result.status === 'unsaved') {
         pill.className = 'pill info';
-        pill.textContent = 'Metatag leído, pero este blanco no está guardado — usando el actual';
+        pill.textContent = 'Código óptico leído, pero este blanco no está guardado — usando el actual';
       }
       return;
     }
     if (recognizeAttempts >= RECOGNIZE_BUDGET) {
       recognizeDone = true;
       pill.className = 'pill';
-      pill.textContent = 'No se pudo leer el metatag — usando el blanco actual (podés cargar uno manualmente)';
+      pill.textContent = 'No se pudo leer el código óptico — usando el blanco actual (podés cargar uno manualmente)';
     }
   }
 
@@ -862,7 +862,7 @@ const DryFire = (() => {
       detail += ' · toque manual';
     }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${drill.idx}</td><td>${entry.label}</td><td>${entry.rt.toFixed(0)}ms</td><td class="${entry.ok ? 'success-txt' : 'danger-txt'}">${entry.ok ? 'OK' : 'ERR'}</td><td style="font-size:11px; color:var(--text-dim); white-space:nowrap;">${detail}</td>`;
+    tr.innerHTML = `<td>${drill.idx}</td><td>${entry.label}</td><td>${entry.rt.toFixed(0)}ms</td><td class="${entry.ok ? 'success-txt' : 'danger-txt'}">${entry.ok ? '✔' : '✘'}</td><td style="font-size:11px; color:var(--text-dim); white-space:nowrap;">${detail}</td>`;
     $('#drillLogBody').prepend(tr);
   }
 

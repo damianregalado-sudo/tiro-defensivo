@@ -1,8 +1,11 @@
-// Smoke test for build 2026-08-28.11 — verifies (without camera/laser, which
+// Smoke test for build 2026-08-28.13 — verifies (without camera/laser, which
 // can't be simulated headlessly): no console errors on load, the two hidden
 // debug/JSON panels and the "Sobre esta app" technical footer are gone from
-// the visible page, the build badge is correct, and the new flashScreen()
-// helper actually toggles the #screenFlash overlay's opacity.
+// the visible page, the build badge is correct, the new flashScreen()
+// helper actually toggles the #screenFlash overlay's opacity, the app is
+// renamed to "Entrena Tiro", and none of the stray English/loanword terms
+// found in builds .12-.13 (LOCKED/ARMED/SafetyState/TargetMind/OK/ERR/
+// Safety Gate/Prompt/RT/checklist) are visible anywhere on the page.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -25,10 +28,17 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .11', bodyText.includes('build 2026-08-28.11'));
+  check('badge de build dice .13', bodyText.includes('build 2026-08-28.13'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
+  check('la app se llama "Entrena Tiro"', bodyText.includes('Entrena Tiro') && await page.title() === 'Entrena Tiro');
+  check('no queda "TargetMind" visible', !bodyText.includes('TargetMind'));
+  const strayEnglish = ['LOCKED', 'ARMED', 'SafetyState', 'Safety Gate', 'Prompt', 'checklist', 'Checklist'];
+  for (const w of strayEnglish) check(`sin la palabra suelta en inglés "${w}"`, !bodyText.includes(w));
+  // La columna OK/ERR de la tabla de registro (ahora ✔/✘) solo se llena
+  // corriendo una ronda del drill completa, que necesita cámara/láser — no
+  // se puede verificar acá sin hardware real.
 
   const targetJsonCardVisible = await page.evaluate(() => {
     const h2s = [...document.querySelectorAll('h2')];

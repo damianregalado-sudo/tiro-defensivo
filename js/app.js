@@ -19,7 +19,7 @@ const App = (() => {
 
   function onArmed(mode) {
     $('#statusDot').classList.add('on');
-    $('#statusText').textContent = 'SAFETY STATE: ARMED — CÁMARA HABILITADA';
+    $('#statusText').textContent = 'ESTADO DE SEGURIDAD: ARMADO — CÁMARA HABILITADA';
     unlockTabs();
     if (mode) {
       $('#pageMode').value = mode;

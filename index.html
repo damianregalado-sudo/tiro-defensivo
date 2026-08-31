@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TargetMind</title>
-<meta name="description" content="Entrenamiento de tiro con arma láser: checklist de seguridad, generador de blancos vectoriales y cámara con auto-lock/homografía.">
+<title>Entrena Tiro</title>
+<meta name="description" content="Entrenamiento de tiro con arma láser: chequeo de seguridad, generador de blancos vectoriales y cámara con calibrado y bloqueo automáticos.">
 <meta name="theme-color" content="#101216">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -21,14 +21,14 @@
     <div class="brand">
       <div class="brand-mark"></div>
       <div class="brand-text">
-        <h1>TargetMind</h1>
+        <h1>Entrena Tiro</h1>
         <span>Entrenamiento con arma láser &mdash; app web</span>
       </div>
     </div>
     <div class="system-status">
-      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.11</span>
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.13</span>
       <span class="dot" id="statusDot"></span>
-      <span id="statusText">SAFETY GATE: LOCKED</span>
+      <span id="statusText">ESTADO DE SEGURIDAD: BLOQUEADO</span>
     </div>
   </div>
 
@@ -43,15 +43,15 @@
   <!-- ========================= PANEL 1: SAFETY ========================= -->
   <div class="panel active" id="panel-safety">
     <div class="card">
-      <h2>Safety Gate &mdash; antes de empezar</h2>
-      <p class="sub">El checklist depende de qué vas a practicar: no tiene sentido "certificar" que no hay munición real si vas a tirar con munición real. Elegí primero, y el sistema permanece en <code class="inline">SafetyState.LOCKED</code> hasta completar los 4 pasos correspondientes, en orden, cada uno con un gesto de deslizar.</p>
+      <h2>Control de seguridad &mdash; antes de empezar</h2>
+      <p class="sub">El chequeo de seguridad depende de qué vas a practicar: no tiene sentido "certificar" que no hay munición real si vas a tirar con munición real. Elegí primero, y el sistema permanece en <code class="inline">EstadoSeguridad.BLOQUEADO</code> hasta completar los 4 pasos correspondientes, en orden, cada uno con un gesto de deslizar.</p>
 
       <div id="safetyModePicker">
         <div class="mode-options">
           <button class="mode-option" id="modeDryBtn" data-mode="DRY">
             <span class="mode-icon">🔴</span>
             <span class="mode-title">Fuego seco</span>
-            <span class="mode-desc">Cartucho láser, sin munición real. Checklist de armado seguro del entrenador.</span>
+            <span class="mode-desc">Cartucho láser, sin munición real. Chequeo de armado seguro del entrenador.</span>
           </button>
           <button class="mode-option" id="modeLiveBtn" data-mode="LIVE">
             <span class="mode-icon">🎯</span>
@@ -134,14 +134,14 @@
         <div class="gate-banner">
           <span class="dot" id="gateDot"></span>
           <div>
-            <div class="state" id="gateState">0 / 4 pasos completados — SafetyState.LOCKED</div>
+            <div class="state" id="gateState">0 / 4 pasos completados — EstadoSeguridad.BLOQUEADO</div>
             <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">El botón "Iniciar sesión" permanece deshabilitado hasta completar todo.</div>
           </div>
         </div>
 
         <div class="btn-row" style="margin-top:14px;">
-          <button class="btn btn-accent" id="btnArm" disabled>Iniciar sesión &mdash; SafetyState.ARMED</button>
-          <button class="btn btn-ghost" id="btnResetSafety">Reiniciar checklist</button>
+          <button class="btn btn-accent" id="btnArm" disabled>Iniciar sesión &mdash; EstadoSeguridad.ARMADO</button>
+          <button class="btn btn-ghost" id="btnResetSafety">Reiniciar pasos</button>
         </div>
       </div>
     </div>
@@ -152,7 +152,7 @@
     <div class="grid-2">
       <div class="card">
         <h2>Generador de blanco vectorial</h2>
-        <p class="sub">Define el papel y el modo. Calcula el área segura (margen de 10&nbsp;mm), coloca los 4 anclajes fiduciales y el metatag óptico. El PDF exportado es vectorial a escala real.</p>
+        <p class="sub">Define el papel y el modo. Calcula el área segura (margen de 10&nbsp;mm), coloca los 4 anclajes fiduciales y el código óptico de identificación. El PDF exportado es vectorial a escala real.</p>
 
         <div class="field">
           <label class="field-label">Tamaño de papel</label>
@@ -241,8 +241,8 @@
     <!-- Panel técnico "JSON del blanco" oculto por el mismo motivo — #targetJson sigue
          recibiendo contenido desde js/app.js (renderJson) pero nunca se muestra. -->
     <div class="card" style="display:none !important;">
-      <h2>JSON del blanco (Target Metatag decodificado)</h2>
-      <p class="sub">Lo que el motor de visión extrae del metatag y usa para cargar el mapa de zonas.</p>
+      <h2>JSON del blanco (código óptico decodificado)</h2>
+      <p class="sub">Lo que el motor de visión extrae del código óptico y usa para cargar el mapa de zonas.</p>
       <div class="table-wrap"><pre class="mono" id="targetJson" style="margin:0; font-size:12px; color:var(--text-dim); white-space:pre-wrap;">// generá un blanco para ver el JSON</pre></div>
     </div>
   </div>
@@ -316,7 +316,7 @@
         <div>
           <label class="field-label">Registro de la sesión</label>
           <div class="table-wrap" style="max-height:220px; overflow-y:auto;">
-            <table><thead><tr><th>#</th><th>Prompt</th><th>RT</th><th>Res.</th><th>Detalle</th></tr></thead><tbody id="drillLogBody"></tbody></table>
+            <table><thead><tr><th>#</th><th>Consigna</th><th>T. Reac.</th><th>Res.</th><th>Detalle</th></tr></thead><tbody id="drillLogBody"></tbody></table>
           </div>
         </div>
       </div>
@@ -373,7 +373,7 @@
         <div>
           <h3 style="font-size:15px; margin-bottom:8px;">Drills de fuego seco</h3>
           <div class="table-wrap" style="max-height:320px; overflow-y:auto;">
-            <table><thead><tr><th>Fecha</th><th>Rondas</th><th>Aciertos</th><th>RT prom.</th></tr></thead><tbody id="histDrillBody"></tbody></table>
+            <table><thead><tr><th>Fecha</th><th>Rondas</th><th>Aciertos</th><th>T. Reac. prom.</th></tr></thead><tbody id="histDrillBody"></tbody></table>
           </div>
         </div>
         <div>
@@ -390,7 +390,7 @@
   </div>
 
   <div class="footer-note">
-    <span class="pill">build 2026-08-28.11</span>
+    <span class="pill">build 2026-08-28.13</span>
   </div>
 </div>
 

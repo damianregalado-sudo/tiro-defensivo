@@ -217,7 +217,7 @@ const LiveFire = (() => {
       const overlay = $('#liveOverlay');
       overlay.width = Vision.WARP_W; overlay.height = Vision.WARP_H;
       overlay.addEventListener('click', onManualClick);
-      $('#liveHudCam').textContent = 'LOCKED';
+      $('#liveHudCam').textContent = 'BLOQUEADO';
       $('#liveHudCam').className = 'pill success';
       recognizeAttempts = 0;
       recognizeDone = false;
@@ -272,14 +272,14 @@ const LiveFire = (() => {
         pill.textContent = `Blanco reconocido: ${result.rec.name}`;
       } else if (result.status === 'unsaved') {
         pill.className = 'pill info';
-        pill.textContent = 'Metatag leído, pero este blanco no está guardado — usando el actual';
+        pill.textContent = 'Código óptico leído, pero este blanco no está guardado — usando el actual';
       }
       return;
     }
     if (recognizeAttempts >= RECOGNIZE_BUDGET) {
       recognizeDone = true;
       pill.className = 'pill';
-      pill.textContent = 'No se pudo leer el metatag — usando el blanco actual';
+      pill.textContent = 'No se pudo leer el código óptico — usando el blanco actual';
     }
   }
 
@@ -324,7 +324,7 @@ const LiveFire = (() => {
   }
 
   function startGroup() {
-    if (!currentFrameMat) { alert('Esperá a que la cámara esté LOCKED.'); return; }
+    if (!currentFrameMat) { alert('Esperá a que la cámara esté BLOQUEADA sobre el blanco.'); return; }
     referenceGray = Vision.grayFromMat(currentFrameMat);
     recognizeDone = true; // lock the target for the duration of the group
     const pill = $('#liveRecogState');
