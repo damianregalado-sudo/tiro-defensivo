@@ -13,7 +13,7 @@
 // strictly required for correctness anymore (network-first means updates
 // show up regardless), but it guarantees old cached entries get swept on
 // activate instead of accumulating forever.
-const CACHE_VERSION = 'v40';
+const CACHE_VERSION = 'v41';
 const CACHE = 'entrenatiro-' + CACHE_VERSION;
 const SHELL = [
   './', './index.html', './manifest.json',
@@ -58,8 +58,27 @@ self.addEventListener('fetch', (event) => {
   if (sameOrigin) {
     // network-first: always prefer the live version; cache is only the
     // offline fallback, and gets refreshed on every successful fetch.
+    //
+    // { cache: 'no-store' } here matters a lot more than it looks — without
+    // it, `fetch(req)` inside a service worker still goes through the
+    // BROWSER'S OWN HTTP cache, not just ours. GitHub Pages serves static
+    // files with a Cache-Control that lets the browser reuse a script for a
+    // while (commonly ~10 min) without even asking the network. So even
+    // though this handler calls fetch() on every request ("network-first"
+    // at the JS level), the browser could quietly hand back a stale
+    // js/drill.js from ITS cache instead of actually hitting the network —
+    // and this code would never know the difference, since fetch() just
+    // resolves with whatever it got. That's a real, reported case: build
+    // .16 fixed a crash in js/drill.js, index.html on the phone correctly
+    // showed the new build number (documents aren't cached as long/at all
+    // in most browsers), but the crash kept happening — consistent with
+    // the HTML being fresh while drill.js itself was still being served
+    // from the browser's HTTP cache. `no-store` forces every same-origin
+    // fetch through this handler to actually ask the network, no matter
+    // what Cache-Control said, so a push+redeploy shows up on the very
+    // next load instead of after Cache-Control's max-age quietly expires.
     event.respondWith(
-      fetch(req).then((res) => {
+      fetch(req, { cache: 'no-store' }).then((res) => {
         if (res && res.status === 200) {
           const copy = res.clone();
           caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => {});
