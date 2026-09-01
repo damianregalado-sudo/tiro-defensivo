@@ -207,7 +207,21 @@ const DryFire = (() => {
     const isIpsc = target.family === 'ipsc';
     $('#drySideReaction').style.display = isIpsc ? 'none' : '';
     $('#drySideIpsc').style.display = isIpsc ? '' : 'none';
-    $('#dryPrompt').style.display = 'none';
+    // OJO: #dryPrompt vive DENTRO del innerHTML que arma wrap.innerHTML más
+    // abajo — no existe todavía en el DOM la primera vez que corre esta
+    // función. Antes había acá un `$('#dryPrompt').style.display = 'none';`
+    // que corría ANTES de crear ese elemento: en la primerísima vez que se
+    // abre Fuego Seco en una sesión (o sea, virtualmente siempre que alguien
+    // recarga la app y manda un blanco por primera vez), `$('#dryPrompt')`
+    // daba null y esa línea tiraba una excepción ahí mismo — dejando
+    // `#drySide` ya visible (con las rondas/dificultad de esta reacción, o
+    // el panel de puntería) pero SIN terminar de armar `wrap.innerHTML`, así
+    // que `#dryVideo` nunca se creaba. El resultado: tocar "Activar cámara"
+    // pasaba `video = null` a `Vision.start()`, que fallaba con "Cannot set
+    // properties of null (setting 'srcObject')" — el bug reportado. Ya no
+    // hace falta esa línea: la plantilla de abajo crea `#dryPrompt` con
+    // `style="display:none;"` de entrada, así que ocultarlo de nuevo acá era
+    // redundante incluso cuando SÍ existía.
     resetPunteriaUi();
     const wrap = $('#dryScopeWrap');
     wrap.innerHTML = `
