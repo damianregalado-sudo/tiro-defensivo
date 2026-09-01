@@ -37,6 +37,17 @@ const FIDUCIAL_SIZE = 46;
 // to the bottom-center strip keeps it fully separate from every fiducial.
 const METATAG_ZONE = { x0: 410, y0: 735, x1: 585, y1: 910 };
 
+// Reserved zone for the optional "compartir blanco" QR code (build .18) —
+// same y-band as METATAG_ZONE, mirrored to its right, so both live in the
+// existing bottom margin strip without touching any corner fiducial or each
+// other. This is only an EXCLUSION box for keeping random shapes clear of
+// it (used by generateShapes, same pattern as METATAG_ZONE) — the QR
+// itself must be physically SQUARE, and this box's grid-unit width/height
+// map to different mm sizes per axis on non-square paper (A4 safeW≠safeH),
+// so the actual drawn QR is a square inscribed in this box, not the box
+// itself. See qrPhysicalBox() in target.js.
+const QR_ZONE = { x0: 610, y0: 735, x1: 785, y1: 910 };
+
 // 1 MOA subtends this many millimeters per meter of distance.
 const MOA_MM_PER_METER = 0.29089;
 

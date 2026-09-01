@@ -76,6 +76,7 @@ const App = (() => {
       distSimulated: parseFloat($('#distSimulated').value) || 15,
       shapeCount: parseInt($('#shapeCount').value, 10) || 7,
       family: getSelectedFamily(),
+      includeQr: $('#includeQr') ? $('#includeQr').checked : false,
     });
     refreshTargetUi();
   }
@@ -168,7 +169,31 @@ const App = (() => {
     $('#distSimulated').value = target.distSimulated;
     setFamilyUi(target.family === 'ipsc' ? 'ipsc' : 'reaction');
     if (target.family !== 'ipsc') $('#shapeCount').value = target.shapes.length;
+    if ($('#includeQr')) $('#includeQr').checked = !!target.qr;
     refreshTargetUi();
+  }
+
+  // Build .18 — "compartir blanco": si la app se abrió desde un enlace con
+  // #t=<código> (el que sale de escanear el QR impreso en otro blanco, o de
+  // compartirlo por WhatsApp/lo que sea), decodifica ese código y carga el
+  // blanco completo — geometría incluida — aunque este dispositivo nunca lo
+  // haya generado. Se guarda en la biblioteca al toque (mismo mecanismo que
+  // autoSaveTarget) para que quede disponible offline de ahí en más, no solo
+  // mientras dura esta URL. Se limpia el hash enseguida para no reimportar
+  // si la página se recarga.
+  function tryImportFromHash() {
+    const hash = location.hash;
+    if (!hash.startsWith('#t=')) return;
+    const code = hash.slice(3);
+    history.replaceState(null, '', location.pathname + location.search);
+    const decoded = Target.decodeShareCode(code);
+    if (!decoded) {
+      alert('El código del blanco en el enlace parece inválido o dañado (¿se cortó al copiarlo/reenviarlo?). No se importó nada.');
+      return;
+    }
+    setActiveTarget(decoded);
+    upsertSavedTarget(`Importado #${decoded.id}`);
+    alert(`Blanco #${decoded.id} importado y guardado en tu biblioteca. Completá el chequeo de seguridad para poder mandarlo a Fuego Seco/Real.`);
   }
 
   function loadSavedTarget(id) {
@@ -365,7 +390,11 @@ const App = (() => {
     $('#btnGenerate').addEventListener('click', buildTarget);
     $('#btnReroll').addEventListener('click', () => {
       if (!target || target.family === 'ipsc') { buildTarget(); return; }
-      target.shapes = Target.generateShapes(target.shapes.length, target.pageSize);
+      // target.qr importa acá: si el blanco tiene el QR de "compartir"
+      // activado, las figuras nuevas también tienen que esquivar su
+      // espacio reservado — antes de este build no se pasaba y un
+      // re-tiro podía tapar el QR con una figura.
+      target.shapes = Target.generateShapes(target.shapes.length, target.pageSize, target.qr);
       refreshTargetUi();
     });
     $$('.family-btn').forEach(b => b.addEventListener('click', () => setFamilyUi(b.dataset.family)));
@@ -463,6 +492,7 @@ const App = (() => {
 
     renderHistory();
     DryFire.setupCtaBar();
+    tryImportFromHash();
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

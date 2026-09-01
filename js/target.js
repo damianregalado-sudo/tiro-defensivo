@@ -19,7 +19,7 @@ const Target = (() => {
   // may return fewer than `count` if it runs out of room. That's intentional
   // (silently stopping early beats an infinite/slow retry loop or shapes
   // crammed edge-to-edge); the caller just gets however many actually fit.
-  function generateShapes(count, pageSize) {
+  function generateShapes(count, pageSize, includeQr) {
     const { rMin, rMax } = shapeRadiusRangeGrid(pageSize);
     const shapes = [];
     let attempts = 0;
@@ -32,6 +32,10 @@ const Target = (() => {
       // bounding-circle avoidance (with padding) — works for wherever
       // METATAG_ZONE actually is, not just a corner placement
       const nearMeta = cx + r > METATAG_ZONE.x0 - 40 && cx - r < METATAG_ZONE.x1 + 40 && cy + r > METATAG_ZONE.y0 - 40;
+      // Same avoidance, but only when this target actually carries the
+      // "compartir blanco" QR (build .18) — no point reserving the space
+      // for shapes to dodge a block that won't be drawn.
+      const nearQr = includeQr && cx + r > QR_ZONE.x0 - 40 && cx - r < QR_ZONE.x1 + 40 && cy + r > QR_ZONE.y0 - 40;
       // Distance-to-corner-center test instead of a fixed cx/cy box: a fixed
       // box only kept small shapes clear of the fiducials — a big shape
       // whose center sits outside a small box can still reach into the
@@ -39,7 +43,7 @@ const Target = (() => {
       // own half-width; the extra 20 is breathing room.
       const nearCorner = FIDUCIAL_CORNERS.some(fc => Math.hypot(cx - fc.x, cy - fc.y) < r + FIDUCIAL_SIZE / 2 + 20);
       const overlap = shapes.some(s => Math.hypot(s.cx - cx, s.cy - cy) < (s.r + r + 16));
-      if (nearMeta || nearCorner || overlap) continue;
+      if (nearMeta || nearQr || nearCorner || overlap) continue;
       shapes.push({
         id: 's' + shapes.length,
         type: choice(SHAPE_TYPES).id,
@@ -70,7 +74,7 @@ const Target = (() => {
   }
 
   function build(config) {
-    const { pageSize, mode, distDesigned, distSimulated, shapeCount, family } = config;
+    const { pageSize, mode, distDesigned, distSimulated, shapeCount, family, includeQr } = config;
     const fam = family === 'ipsc' ? 'ipsc' : 'reaction';
     return {
       // 16-bit id, printed into the metatag, is how the camera later
@@ -83,9 +87,199 @@ const Target = (() => {
       // Solo la familia "reacción" sortea figuras — "puntería" usa la
       // silueta/zonas A/C/D fijas definidas en constants.js (ver
       // drawIpscSilhouette/zoneAt más abajo), así que no necesita nada acá.
-      shapes: fam === 'reaction' ? generateShapes(clamp(shapeCount, 3, 16), pageSize) : [],
+      shapes: fam === 'reaction' ? generateShapes(clamp(shapeCount, 3, 16), pageSize, !!includeQr) : [],
+      // Build .18: si el generador tenía tildado "Incluir código QR", este
+      // blanco lleva además un bloque QR impreso (ver encodeShareCode/
+      // qrPhysicalBox más abajo) — un enlace que, escaneado con la cámara
+      // normal del teléfono (no la de esta app), abre el navegador con este
+      // blanco YA cargado y guardado, aunque ese celular nunca lo haya
+      // generado. Se guarda en el propio blanco (no solo en el momento de
+      // generarlo) para que "Re-tirar figuras" y el reimport sepan si deben
+      // seguir reservando/dibujando ese espacio.
+      qr: !!includeQr,
       createdAt: Date.now(),
     };
+  }
+
+  // ---- Compartir blanco (código QR / enlace) — build .18 --------------------
+  // Distinto del código óptico de 36 bits (metatagBits/encodeBits/decodeBits
+  // más abajo): ESE código solo sirve para RECONOCER un blanco que la app ya
+  // tiene guardado en ESTE dispositivo (la cámara lo lee y busca el ID en
+  // "Blancos guardados" — si no está ahí, no sirve de nada). Este código en
+  // cambio lleva la geometría COMPLETA adentro, así que funciona en un
+  // celular que nunca generó ni guardó este blanco — el caso de alguien que
+  // compra un blanco ya impreso. Para la familia "reacción" eso incluye las
+  // figuras exactas (son aleatorias, no hay otra forma de reproducirlas); la
+  // familia "puntería" no necesita mandarlas porque su silueta es siempre la
+  // misma (ver constants.js).
+  //
+  // Formato compacto (no JSON) para que entre cómodo en un QR chico y
+  // confiable de escanear: campos separados por "~", y — solo en "reacción"
+  // — un campo final con las figuras separadas por ";", cada una
+  // "tipoIdx,colorIdx,cx,cy,r,número" separada por ",". El resultado se
+  // codifica en base64url (variante segura para URL de base64) para viajar
+  // como fragmento de URL (#t=...) sin necesitar escapar nada.
+  const SHARE_VERSION = '1';
+  function encodeShareCode(t) {
+    const parts = [
+      SHARE_VERSION,
+      t.family === 'ipsc' ? 'i' : 'r',
+      t.id,
+      t.pageSize,
+      t.mode,
+      t.distDesigned,
+      t.distSimulated,
+    ];
+    let s = parts.join('~');
+    if (t.family !== 'ipsc') {
+      s += '~' + t.shapes.map(sh => {
+        const typeIdx = SHAPE_TYPES.findIndex(x => x.id === sh.type);
+        const colorIdx = SHAPE_COLORS.findIndex(x => x.id === sh.color);
+        return [typeIdx, colorIdx, Math.round(sh.cx), Math.round(sh.cy), Math.round(sh.r), sh.number].join(',');
+      }).join(';');
+    }
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  // Devuelve un blanco completo (mismo shape que Target.build() produce) o
+  // null si el código está roto/truncado/es de una versión futura — nunca
+  // tira una excepción hacia afuera, para que el que llama solo tenga que
+  // chequear "¿vino null?" en vez de armar un try/catch propio.
+  function decodeShareCode(code) {
+    try {
+      let b64 = String(code).replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      const parts = atob(b64).split('~');
+      if (parts[0] !== SHARE_VERSION) return null;
+      const [, famChar, idStr, pageSize, mode, distDesignedStr, distSimulatedStr, shapeStr] = parts;
+      if (!PAGE_SPECS[pageSize]) return null;
+      if (mode !== 'DRY' && mode !== 'LIVE') return null;
+      const id = parseInt(idStr, 10);
+      if (!Number.isFinite(id) || id < 1 || id > 65535) return null;
+      const distDesigned = parseFloat(distDesignedStr);
+      const distSimulated = parseFloat(distSimulatedStr);
+      if (!Number.isFinite(distDesigned) || !Number.isFinite(distSimulated)) return null;
+      const family = famChar === 'i' ? 'ipsc' : 'reaction';
+      let shapes = [];
+      if (family === 'reaction') {
+        if (!shapeStr) return null;
+        shapes = shapeStr.split(';').filter(Boolean).map((chunk, i) => {
+          const [typeIdx, colorIdx, cx, cy, r, number] = chunk.split(',').map(Number);
+          const type = SHAPE_TYPES[typeIdx], color = SHAPE_COLORS[colorIdx];
+          if (!type || !color || !Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(r)) {
+            throw new Error('figura inválida en el código');
+          }
+          return { id: 's' + i, type: type.id, color: color.id, cx, cy, r, number };
+        });
+        if (!shapes.length) return null;
+      }
+      return { id, pageSize, mode, family, distDesigned, distSimulated, shapes, qr: true, createdAt: Date.now() };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // location.origin+pathname (sin query ni hash) + el código como fragmento
+  // — así el mismo enlace sirve sin importar en qué carpeta/dominio esté
+  // desplegada esta copia de la app (GitHub Pages del comprador, un
+  // dominio propio, etc.), y abrirlo no dispara ninguna carga de red extra
+  // (el fragmento nunca viaja al servidor).
+  function buildShareUrl(t) {
+    return location.origin + location.pathname + '#t=' + encodeShareCode(t);
+  }
+
+  // Matriz de módulos (true = oscuro) de un QR que codifica `url`, usando la
+  // librería vendoreada qrcode-generator (Kazuhiko Arase, MIT — ver
+  // index.html). null si la librería no llegó a cargar (sin conexión la
+  // primera vez, CDN caído) — quien dibuja debe animarse a mostrar un
+  // aviso en ese caso en vez de dejar un hueco en blanco sin explicación.
+  // typeNumber=0 dej que la librería elija automáticamente el tamaño de QR
+  // más chico que entra el contenido — el string crece con la cantidad de
+  // figuras, así que un blanco con pocas figuras saca un QR más chico
+  // (más fácil de escanear) que uno con muchas.
+  function computeQrModules(url) {
+    if (typeof qrcode !== 'function') return null;
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      const n = qr.getModuleCount();
+      const modules = [];
+      for (let r = 0; r < n; r++) {
+        const row = [];
+        for (let c = 0; c < n; c++) row.push(qr.isDark(r, c));
+        modules.push(row);
+      }
+      return modules;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // El QR tiene que ser físicamente CUADRADO — pero QR_ZONE está en
+  // unidades de grilla, y sx/sy (unidades de grilla → mm o px de canvas)
+  // son DISTINTOS en un papel no cuadrado (A4: 190×277mm de área segura),
+  // así que el rectángulo que resulta de escalar QR_ZONE tal cual no es
+  // cuadrado. Esta función inscribe el cuadrado más grande posible,
+  // centrado, dentro de ese rectángulo — funciona igual para el canvas
+  // (sx/sy en px/unidad) que para el PDF (sx/sy en mm/unidad), mismo
+  // patrón que el resto de este archivo usa para reusar geometría entre
+  // ambos.
+  function qrPhysicalBox(sx, sy, originX, originY) {
+    const z = QR_ZONE;
+    const rectX = originX + z.x0 * sx, rectY = originY + z.y0 * sy;
+    const rectW = (z.x1 - z.x0) * sx, rectH = (z.y1 - z.y0) * sy;
+    const size = Math.min(rectW, rectH);
+    return { x: rectX + (rectW - size) / 2, y: rectY + (rectH - size) / 2, size };
+  }
+
+  function drawQrCanvas(ctx, target, box) {
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(box.x, box.y, box.size, box.size);
+    const modules = computeQrModules(buildShareUrl(target));
+    if (!modules) {
+      ctx.strokeStyle = '#c00'; ctx.lineWidth = Math.max(1, box.size * 0.01);
+      ctx.strokeRect(box.x + 1, box.y + 1, box.size - 2, box.size - 2);
+      ctx.fillStyle = '#c00';
+      ctx.font = `${Math.max(8, box.size * 0.09)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('QR no', box.x + box.size / 2, box.y + box.size / 2 - 4);
+      ctx.fillText('disponible', box.x + box.size / 2, box.y + box.size / 2 + 10);
+      return;
+    }
+    // "quiet zone": margen en blanco alrededor de los módulos, requerido
+    // por el estándar QR — sin esto, un escáner puede confundir el borde
+    // del código con el resto del dibujo del blanco y fallar la lectura.
+    const n = modules.length, quiet = 4;
+    const cell = box.size / (n + quiet * 2);
+    ctx.fillStyle = '#111';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (modules[r][c]) ctx.fillRect(box.x + (c + quiet) * cell, box.y + (r + quiet) * cell, cell + 0.5, cell + 0.5);
+      }
+    }
+  }
+
+  function drawQrPdf(doc, target, box) {
+    doc.setFillColor(255, 255, 255);
+    doc.rect(box.x, box.y, box.size, box.size, 'F');
+    const modules = computeQrModules(buildShareUrl(target));
+    if (!modules) {
+      doc.setDrawColor(200, 0, 0);
+      doc.rect(box.x, box.y, box.size, box.size, 'D');
+      doc.setFontSize(7);
+      doc.setTextColor(200, 0, 0);
+      doc.text('QR no disponible (sin conexión al exportar)', box.x + box.size / 2, box.y + box.size / 2, { align: 'center', maxWidth: box.size - 2 });
+      return;
+    }
+    const n = modules.length, quiet = 4;
+    const cell = box.size / (n + quiet * 2);
+    doc.setFillColor(17, 17, 17);
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (modules[r][c]) doc.rect(box.x + (c + quiet) * cell, box.y + (r + quiet) * cell, cell, cell, 'F');
+      }
+    }
   }
 
   // ---- Puntería (estilo IPSC): geometría fija + hit-test de zonas ---------
@@ -425,6 +619,18 @@ const Target = (() => {
     ctx.font = `${Math.max(9, zh * 0.11)}px monospace`;
     ctx.textAlign = 'center';
     ctx.fillText(`ID ${target.id}`, zx + zw / 2, zy + zh + Math.max(11, zh * 0.14));
+
+    // QR "compartir blanco" (build .18) — solo si este blanco lo tiene
+    // habilitado. Ver qrPhysicalBox() para por qué no es simplemente
+    // QR_ZONE escalado tal cual.
+    if (target.qr) {
+      const box = qrPhysicalBox(sx, sy, safeX, safeY);
+      drawQrCanvas(ctx, target, box);
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.font = `${Math.max(8, box.size * 0.085)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('Escaneá para vincular', box.x + box.size / 2, box.y + box.size + Math.max(10, box.size * 0.11));
+    }
   }
 
   function toJson(t) {
@@ -532,6 +738,14 @@ const Target = (() => {
     doc.setTextColor(90);
     doc.text(`ID ${target.id}`, zx + zw / 2, zy + zh + 4, { align: 'center' });
 
+    if (target.qr) {
+      const box = qrPhysicalBox(sx, sy, safeX, safeY);
+      drawQrPdf(doc, target, box);
+      doc.setFontSize(7);
+      doc.setTextColor(90);
+      doc.text('Escaneá para vincular', box.x + box.size / 2, box.y + box.size + 4, { align: 'center' });
+    }
+
     doc.setFontSize(7);
     doc.setTextColor(140);
     doc.text(`Entrena Tiro · ${spec.label} · ${target.mode === 'DRY' ? 'FUEGO SECO' : 'FUEGO REAL'} · dist. ${target.mode === 'DRY' ? target.distSimulated + 'm sim (' + target.distDesigned + 'm real)' : target.distDesigned + 'm'}`, spec.pageW / 2, spec.pageH - 4, { align: 'center' });
@@ -543,5 +757,6 @@ const Target = (() => {
     generateShapes, equationForNumber, build, metatagBits, encodeBits, decodeBits,
     drawFiducial, drawShape, drawGrid, drawPrintPreview, toJson, exportPdf,
     zoneAt, drawIpscSilhouette,
+    encodeShareCode, decodeShareCode, buildShareUrl,
   };
 })();
