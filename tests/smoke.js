@@ -1,4 +1,4 @@
-// Smoke test for build 2026-08-28.14 — verifies (without camera/laser, which
+// Smoke test for build 2026-08-28.15 — verifies (without camera/laser, which
 // can't be simulated headlessly): no console errors on load, the two hidden
 // debug/JSON panels and the "Sobre esta app" technical footer are gone from
 // the visible page, the build badge is correct, the new flashScreen()
@@ -33,7 +33,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .14', bodyText.includes('build 2026-08-28.14'));
+  check('badge de build dice .15', bodyText.includes('build 2026-08-28.15'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);

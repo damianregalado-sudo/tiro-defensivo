@@ -89,9 +89,16 @@ const Target = (() => {
   }
 
   // ---- Puntería (estilo IPSC): geometría fija + hit-test de zonas ---------
-  function pointInEllipse(x, y, e) {
-    const dx = (x - e.cx) / e.rx, dy = (y - e.cy) / e.ry;
-    return dx * dx + dy * dy <= 1;
+  // Los cuadros de zona (A/C, torso y cabeza) son rectángulos con las
+  // esquinas redondeadas SOLO para dibujarlos — el hit-test usa el
+  // rectángulo completo (sin redondear), una simplificación deliberada: el
+  // radio de esquina es chico comparado con el cuadro, así que la
+  // diferencia práctica en el borde es mínima.
+  function pointInRect(x, y, r) {
+    return Math.abs(x - r.cx) <= r.w / 2 && Math.abs(y - r.cy) <= r.h / 2;
+  }
+  function pointInCircle(x, y, c) {
+    return (x - c.cx) * (x - c.cx) + (y - c.cy) * (y - c.cy) <= c.r * c.r;
   }
   function pointInPolygon(x, y, poly) {
     let inside = false;
@@ -103,14 +110,16 @@ const Target = (() => {
     return inside;
   }
   // Devuelve 'A' | 'C' | 'D' | null (null = fuera del blanco por completo).
-  // La cabeza cuenta como zona 'A' — simplificación deliberada (el blanco
-  // real de IPSC separa cabeza y torso con sus propias sub-zonas) para que
-  // esta primera versión tenga un hit-test simple y predecible.
+  // La cabeza tiene su propia sub-zona A (el cuadro chico) y cuenta como 'C'
+  // si el disparo cayó en el círculo de la cabeza pero fuera de ese cuadro —
+  // no hay una zona D separada para la cabeza en esta versión (simplificación
+  // deliberada: un blanco real de competencia sí la tiene, pero no encontré
+  // una medida oficial publicada para copiarla).
   function zoneAt(gx, gy) {
-    const h = IPSC_HEAD;
-    if ((gx - h.cx) * (gx - h.cx) + (gy - h.cy) * (gy - h.cy) <= h.r * h.r) return 'A';
-    if (pointInEllipse(gx, gy, IPSC_ZONE_A)) return 'A';
-    if (pointInEllipse(gx, gy, IPSC_ZONE_C)) return 'C';
+    if (pointInRect(gx, gy, IPSC_HEAD_ZONE_A)) return 'A';
+    if (pointInCircle(gx, gy, IPSC_HEAD)) return 'C';
+    if (pointInRect(gx, gy, IPSC_ZONE_A)) return 'A';
+    if (pointInRect(gx, gy, IPSC_ZONE_C)) return 'C';
     if (pointInPolygon(gx, gy, IPSC_TORSO_POLY)) return 'D';
     return null;
   }
@@ -122,6 +131,7 @@ const Target = (() => {
   // feed, same rationale as drawShape's outline mode.
   function drawIpscSilhouette(ctx, sx, sy, originX, originY, outline) {
     const toPx = (gx, gy) => [originX + gx * sx, originY + gy * sy];
+    const scale = (sx + sy) / 2;
     ctx.save();
     ctx.beginPath();
     IPSC_TORSO_POLY.forEach((p, i) => {
@@ -130,7 +140,7 @@ const Target = (() => {
     });
     ctx.closePath();
     const [hx, hy] = toPx(IPSC_HEAD.cx, IPSC_HEAD.cy);
-    const headR = IPSC_HEAD.r * ((sx + sy) / 2);
+    const headR = IPSC_HEAD.r * scale;
     if (outline) {
       ctx.fillStyle = 'transparent';
       ctx.strokeStyle = '#ff7a1a';
@@ -148,24 +158,30 @@ const Target = (() => {
     // para que el tirador vea contra qué zona se está evaluando cada
     // disparo mientras entrena. Un blanco real de competencia no siempre
     // las muestra así, pero para entrenar es más útil verlas.
-    const drawZoneEllipse = (e, dash, color) => {
-      const [ex, ey] = toPx(e.cx, e.cy);
+    const drawZoneRect = (r, dash, color) => {
+      const [rx, ry] = toPx(r.cx - r.w / 2, r.cy - r.h / 2);
+      const w = r.w * sx, h = r.h * sy, rad = r.r * scale;
       ctx.save();
       ctx.setLineDash(dash);
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(ex, ey, e.rx * sx, e.ry * sy, 0, 0, Math.PI * 2);
+      if (ctx.roundRect) ctx.roundRect(rx, ry, w, h, rad);
+      else ctx.rect(rx, ry, w, h); // fallback si el navegador no soporta roundRect
       ctx.stroke();
       ctx.restore();
     };
-    drawZoneEllipse(IPSC_ZONE_C, [6, 4], outline ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.4)');
-    drawZoneEllipse(IPSC_ZONE_A, [3, 3], outline ? 'rgba(255,255,255,.8)' : 'rgba(0,0,0,.6)');
+    const zoneLineColor = outline ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.4)';
+    const zoneLineColorA = outline ? 'rgba(255,255,255,.8)' : 'rgba(0,0,0,.6)';
+    drawZoneRect(IPSC_ZONE_C, [6, 4], zoneLineColor);
+    drawZoneRect(IPSC_ZONE_A, [3, 3], zoneLineColorA);
+    drawZoneRect(IPSC_HEAD_ZONE_A, [3, 3], zoneLineColorA);
     ctx.restore();
   }
 
   function ipscPdf(doc, safeX, safeY, sx, sy) {
     const toXY = (gx, gy) => [safeX + gx * sx, safeY + gy * sy];
+    const scale = (sx + sy) / 2;
     const pts = IPSC_TORSO_POLY.map(p => toXY(p.x, p.y));
     const deltas = [];
     for (let i = 1; i < pts.length; i++) deltas.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
@@ -173,14 +189,15 @@ const Target = (() => {
     doc.setDrawColor(58, 49, 38);
     doc.lines(deltas, pts[0][0], pts[0][1], [1, 1], 'FD', true);
     const [hx, hy] = toXY(IPSC_HEAD.cx, IPSC_HEAD.cy);
-    doc.circle(hx, hy, IPSC_HEAD.r * ((sx + sy) / 2), 'FD');
+    doc.circle(hx, hy, IPSC_HEAD.r * scale, 'FD');
     doc.setDrawColor(120);
-    const [cx, cy] = toXY(IPSC_ZONE_C.cx, IPSC_ZONE_C.cy);
-    doc.setLineDashPattern([3, 2], 0);
-    doc.ellipse(cx, cy, IPSC_ZONE_C.rx * sx, IPSC_ZONE_C.ry * sy, 'D');
-    const [ax, ay] = toXY(IPSC_ZONE_A.cx, IPSC_ZONE_A.cy);
-    doc.setLineDashPattern([1.5, 1.5], 0);
-    doc.ellipse(ax, ay, IPSC_ZONE_A.rx * sx, IPSC_ZONE_A.ry * sy, 'D');
+    const drawRect = (r, dash) => {
+      doc.setLineDashPattern(dash, 0);
+      doc.roundedRect(safeX + (r.cx - r.w / 2) * sx, safeY + (r.cy - r.h / 2) * sy, r.w * sx, r.h * sy, r.r * scale, r.r * scale, 'D');
+    };
+    drawRect(IPSC_ZONE_C, [3, 2]);
+    drawRect(IPSC_ZONE_A, [1.5, 1.5]);
+    drawRect(IPSC_HEAD_ZONE_A, [1.5, 1.5]);
     doc.setLineDashPattern([], 0);
   }
 
@@ -425,7 +442,7 @@ const Target = (() => {
     };
     if (t.family === 'ipsc') {
       base.targetType = 'puntería (silueta con zonas A/C/D, estilo competencia — no es un blanco oficial licenciado)';
-      base.zones = { head: IPSC_HEAD, zoneA: IPSC_ZONE_A, zoneC: IPSC_ZONE_C, silhouette: IPSC_TORSO_POLY };
+      base.zones = { head: IPSC_HEAD, headZoneA: IPSC_HEAD_ZONE_A, zoneA: IPSC_ZONE_A, zoneC: IPSC_ZONE_C, silhouette: IPSC_TORSO_POLY };
     } else {
       base.targetType = 'reacción (formas/colores/números)';
       base.zones = t.shapes.map(s => ({

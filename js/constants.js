@@ -60,19 +60,42 @@ function shapeRadiusRangeGrid(pageSize) {
 
 // ---- Puntería (silueta con zonas A/C/D, estilo competencia) ---------------
 // Geometría FIJA (no se sortea por blanco, a diferencia de las figuras de
-// reacción) — pensada para parecerse a la proporción general de un blanco
-// métrico de competencia (torso + cabeza + zonas A/C/D), pero es un diseño
-// propio, NO una reproducción del blanco oficial de IPSC ni de ningún otro
-// organismo: IPSC licencia su blanco métrico, así que copiarlo tal cual y
-// distribuirlo sería un problema de derechos, no técnico. Todo en unidades
-// de grilla (0-1000), el mismo espacio normalizado que usan las figuras de
-// reacción — así el mismo motor de homografía/detección de disparos sirve
-// sin cambios para esta familia de blanco también.
-const IPSC_HEAD = { cx: 500, cy: 150, r: 68 };
+// reacción). El CONTORNO y las zonas son un diseño propio (no una
+// reproducción del blanco oficial de IPSC/USPSA, que tiene derechos de esas
+// organizaciones), pero las PROPORCIONES sí están tomadas de medidas
+// publicadas públicamente (una medida en pulgadas no es algo que se pueda
+// "licenciar" — el dibujo exacto sí): la silueta completa mide 18.12 × 29.93
+// pulgadas y el cuadro de zona A del torso mide aprox. 6 × 11 pulgadas
+// (fuente: guía de especificaciones de USPSA/IPSC — ver README, build de
+// esta mejora). El cuadro de zona A de la cabeza y el tamaño de la zona C sí
+// son una aproximación visual (no encontré una medida oficial publicada de
+// la zona C), pensada para verse parecida a un blanco real, no para ser una
+// medida certificada. Todo en unidades de grilla (0-1000), el mismo espacio
+// normalizado que usan las figuras de reacción — así el mismo motor de
+// homografía/detección de disparos sirve sin cambios para esta familia de
+// blanco también.
+//
+// Proporción real 18.12:29.93 (ancho:alto) aplicada a una silueta de 590
+// unidades de alto (cabeza + torso) por ~357 de ancho en los hombros.
+const IPSC_HEAD = { cx: 500, cy: 123, r: 53 };
+// Cuadro de zona A de la cabeza — aproximado (ver nota arriba).
+const IPSC_HEAD_ZONE_A = { cx: 500, cy: 123, w: 50, h: 64, r: 12 };
+// Silueta del torso: hombros redondeados, un quiebre de cuello en el centro
+// (para que la cabeza se vea "insertada", no flotando pegada al torso),
+// cintura que se angosta y cadera que vuelve a ensanchar un poco — más
+// parecido a una silueta humana real que el hexágono de la versión anterior.
 const IPSC_TORSO_POLY = [
-  { x: 330, y: 232 }, { x: 670, y: 232 }, // hombros
-  { x: 652, y: 470 }, { x: 618, y: 660 }, // costado derecho hasta la cadera
-  { x: 382, y: 660 }, { x: 348, y: 470 }, // costado izquierdo de vuelta
+  { x: 322, y: 208 }, { x: 390, y: 195 }, { x: 460, y: 210 },
+  { x: 500, y: 178 }, // quiebre de cuello
+  { x: 540, y: 210 }, { x: 610, y: 195 }, { x: 678, y: 208 },
+  { x: 660, y: 300 }, { x: 634, y: 455 }, { x: 651, y: 560 },
+  { x: 630, y: 660 }, { x: 370, y: 660 }, { x: 349, y: 560 },
+  { x: 366, y: 455 }, { x: 340, y: 300 },
 ];
-const IPSC_ZONE_A = { cx: 500, cy: 335, rx: 100, ry: 155 };
-const IPSC_ZONE_C = { cx: 500, cy: 390, rx: 185, ry: 250 };
+// Cuadro de zona A del torso — proporción real (6 × 11 pulg. sobre el total
+// de 18.12 × 29.93 pulg.), ubicado en el pecho alto.
+const IPSC_ZONE_A = { cx: 500, cy: 358, w: 118, h: 217, r: 16 };
+// Zona C — aproximación visual (ver nota arriba), un cuadro más grande
+// alrededor de la zona A que llega casi hasta los hombros y baja hasta
+// pasada la cintura.
+const IPSC_ZONE_C = { cx: 500, cy: 358, w: 201, h: 336, r: 22 };
