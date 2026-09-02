@@ -75,44 +75,60 @@ function shapeRadiusRangeGrid(pageSize) {
 // reproducción del blanco oficial de IPSC/USPSA, que tiene derechos de esas
 // organizaciones), pero las PROPORCIONES sí están tomadas de medidas
 // publicadas públicamente (una medida en pulgadas no es algo que se pueda
-// "licenciar" — el dibujo exacto sí): la silueta completa mide 18.12 × 29.93
-// pulgadas y el cuadro de zona A del torso mide aprox. 6 × 11 pulgadas
-// (fuente: guía de especificaciones de USPSA/IPSC — ver README, build de
-// esta mejora). El cuadro de zona A de la cabeza y el tamaño de la zona C sí
-// son una aproximación visual (no encontré una medida oficial publicada de
-// la zona C), pensada para verse parecida a un blanco real, no para ser una
-// medida certificada. Todo en unidades de grilla (0-1000), el mismo espacio
-// normalizado que usan las figuras de reacción — así el mismo motor de
-// homografía/detección de disparos sirve sin cambios para esta familia de
-// blanco también.
+// "licenciar" — el dibujo exacto sí). El cuadro de zona A de la cabeza y el
+// tamaño de la zona C son una aproximación visual (no encontré una medida
+// oficial publicada de la zona C), pensada para verse parecida a un blanco
+// real, no para ser una medida certificada. Todo en unidades de grilla
+// (0-1000), el mismo espacio normalizado que usan las figuras de reacción —
+// así el mismo motor de homografía/detección de disparos sirve sin cambios
+// para esta familia de blanco también.
 //
-// Proporción real 18.12:29.93 (ancho:alto) aplicada a una silueta de 590
-// unidades de alto (cabeza + torso) por ~357 de ancho en los hombros.
+// Ancho del torso (build 2026-08-28.26) — pedido directo: "los blancos son
+// muy distintos a los que encontras en un polígono, muy finos, no reales en
+// relación a las dimensiones de un cuerpo real". Le pregunté qué blanco
+// tenía en mente: nombró el B-27 policial (blanco de calificación
+// policial/militar de EEUU, clásico en polígonos) y una silueta genérica de
+// defensa personal — ambos en PAPEL, sin los anillos concéntricos de
+// puntuación (esos los vio en blancos de METAL, no de papel). El ancho real
+// de un B-27/B-21 es la hoja completa de 35×45 pulg. (relación ancho:alto
+// ≈0.78 — fuente: blog.krtraining.com/target-evolution-b-21-b-21x-to-b-27-
+// and-beyond/, gogunzee.com/blogs/range-manual/b-27-target-guide), bastante
+// más ancho que el blanco de competencia IPSC/USPSA (18.12×29.93 pulg.,
+// ≈0.605) que se usaba hasta esta build — las siluetas genéricas "de
+// combate" sin anillos rondan 0.55-0.66 (ej. EIC E-Silhouette 20×36,
+// "Bad Guy" 23×35). El torso de abajo se ensanchó de ≈0.601 (356/592) a
+// ≈0.69 (410/592) — un término medio entre las dos referencias que dio,
+// más cerca del B-27 que nombró primero — manteniendo la misma altura y el
+// mismo afinado de cintura relativo (no se volvió "hexagonal", solo más
+// ancho en toda su extensión). Las zonas A/C de abajo se agrandaron en la
+// misma proporción para seguir viéndose como una zona central del pecho, no
+// todo el ancho del torso.
 //
 // La cabeza es un RECTÁNGULO redondeado (bloque cabeza+cuello), no un
-// círculo — se cambió en esta build a pedido directo ("sigue sin gustarme
-// el diseño del blanco, podes buscar mas ejemplos para mejorarlo"): en los
-// blancos IPSC/USPSA reales la cabeza es un bloque rectangular achatado,
-// nunca una cabeza redonda (ver README, build de esta mejora, con fuentes).
+// círculo — se cambió en el build .24 a pedido directo: en los blancos
+// IPSC/USPSA reales la cabeza es un bloque rectangular achatado, nunca una
+// cabeza redonda (ver README).
 const IPSC_HEAD = { cx: 500, cy: 123, w: 150, h: 110, r: 14 };
 // Cuadro de zona A de la cabeza — aproximado (ver nota arriba).
 const IPSC_HEAD_ZONE_A = { cx: 500, cy: 123, w: 50, h: 64, r: 12 };
 // Silueta del torso: hombros redondeados, un quiebre de cuello en el centro
 // (para que la cabeza se vea "insertada", no flotando pegada al torso),
 // cintura que se angosta y cadera que vuelve a ensanchar un poco — más
-// parecido a una silueta humana real que el hexágono de la versión anterior.
+// parecido a una silueta humana real que el hexágono de versiones
+// anteriores. Ancho de hombros ensanchado en la build .26 (ver nota arriba).
 const IPSC_TORSO_POLY = [
-  { x: 322, y: 208 }, { x: 390, y: 195 }, { x: 460, y: 210 },
+  { x: 295, y: 208 }, { x: 373, y: 195 }, { x: 454, y: 210 },
   { x: 500, y: 178 }, // quiebre de cuello
-  { x: 540, y: 210 }, { x: 610, y: 195 }, { x: 678, y: 208 },
-  { x: 660, y: 300 }, { x: 634, y: 455 }, { x: 651, y: 560 },
-  { x: 630, y: 660 }, { x: 370, y: 660 }, { x: 349, y: 560 },
-  { x: 366, y: 455 }, { x: 340, y: 300 },
+  { x: 546, y: 210 }, { x: 627, y: 195 }, { x: 705, y: 208 },
+  { x: 684, y: 300 }, { x: 654, y: 455 }, { x: 674, y: 560 },
+  { x: 650, y: 660 }, { x: 350, y: 660 }, { x: 326, y: 560 },
+  { x: 346, y: 455 }, { x: 316, y: 300 },
 ];
-// Cuadro de zona A del torso — proporción real (6 × 11 pulg. sobre el total
-// de 18.12 × 29.93 pulg.), ubicado en el pecho alto.
-const IPSC_ZONE_A = { cx: 500, cy: 358, w: 118, h: 217, r: 16 };
+// Cuadro de zona A del torso — agrandado en la misma proporción que el
+// ensanche del torso (build .26, ver nota arriba) para seguir viéndose como
+// una zona central del pecho, no todo el ancho del cuerpo.
+const IPSC_ZONE_A = { cx: 500, cy: 358, w: 136, h: 217, r: 16 };
 // Zona C — aproximación visual (ver nota arriba), un cuadro más grande
 // alrededor de la zona A que llega casi hasta los hombros y baja hasta
-// pasada la cintura.
-const IPSC_ZONE_C = { cx: 500, cy: 358, w: 201, h: 336, r: 22 };
+// pasada la cintura. Agrandada en la misma proporción que el torso (.26).
+const IPSC_ZONE_C = { cx: 500, cy: 358, w: 231, h: 336, r: 22 };

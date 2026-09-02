@@ -458,6 +458,14 @@ La barra de pestañas de arriba (01 Seguridad ... 05 Registro) sigue estando, pa
 
 *Nota honesta*: todo lo de arriba lo verifiqué con pruebas automatizadas que recorren el flujo completo en una sesión nueva (sin cámara real, pero sin necesitarla: es navegación, DOM y dibujo en canvas) — que lo primero que se ve al entrar es la pregunta de qué practicar, que elegir un modo no salta directo al checklist, que enviar un blanco sin haber armado todavía manda al checklist (y no a la cámara), que terminar el checklist aterriza en la pestaña correcta con el blanco correcto ya cargado, que las miniaturas de la biblioteca son dibujos reales (no un canvas vacío), y que el atajo de "ya armado, no repetir el checklist" se preserva. No es una hipótesis.
 
+**Build 2026-08-28.26 — el torso del blanco de Puntería se ensanchó: seguía sin parecerse a un cuerpo real.**
+
+Dijiste: "los blancos son muy distintos a los que encontras en un polígono, muy finos, no reales en relación a las dimensiones de un cuerpo real". El build .24 ya había ajustado la silueta a las medidas oficiales publicadas de IPSC/USPSA, pero esas medidas son angostas A PROPÓSITO — es un blanco pensado para puntuar en competencia a alta velocidad, no para simular el ancho real de un cuerpo. Te pregunté qué blanco tenías en mente y nombraste dos referencias que viste en blancos de PAPEL (no metal — aclaraste que los anillos concéntricos de puntuación sólo los viste en blancos de metal): el **B-27 policial**, el clásico blanco de calificación policial/militar de EEUU, y una **silueta genérica de defensa personal**, ambas notablemente más anchas que el blanco de competencia.
+
+Investigué medidas reales de ambos tipos: un B-27/B-21 mide la hoja completa 35×45 pulgadas (relación ancho:alto ≈0.78), y las siluetas genéricas "de combate" sin anillos rondan 0.55-0.66 — bastante más anchas que el ≈0.605 del blanco IPSC/USPSA de competencia que se venía usando. Ensanché el torso (`IPSC_TORSO_POLY` en `constants.js`) de esa proporción angosta a ≈0.69 — un término medio entre las dos referencias que diste, más cerca del B-27 que nombraste primero — manteniendo la misma altura total y el mismo afinado de cintura relativo (no quedó "hexagonal" ni con una cintura exagerada, sólo más ancho en toda su extensión). Las zonas A/C se agrandaron en la misma proporción para seguir viéndose como una zona central del pecho, no todo el ancho del cuerpo.
+
+*Nota honesta*: al igual que con el cambio de la cabeza en el build .24, esto es una decisión de diseño basada en medidas publicadas de blancos reales (fuentes citadas en `constants.js`), no una medida "oficial" certificada de ningún blanco en particular — no reproduce el B-27 exacto, toma su ancho como referencia. Verifiqué con una prueba automatizada que el torso realmente se ensanchó en el hit-test (no sólo visualmente) y con una captura de pantalla del resultado.
+
 ## Estructura del proyecto
 
 ```

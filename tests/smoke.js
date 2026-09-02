@@ -93,6 +93,18 @@
 // correcto ya cargado, que las miniaturas de la biblioteca son dibujos
 // reales (canvas no vacío) y no un ícono, y que — ya armada la sesión —
 // tocar un blanco guardado nuevo no vuelve a pedir el checklist.
+// New in .26: pedido directo — "los blancos son muy distintos a los que
+// encontras en un polígono, muy finos, no reales en relación a las
+// dimensiones de un cuerpo real". El usuario nombró dos referencias que vio
+// en blancos de PAPEL (no metal): el B-27 policial y una silueta genérica
+// de defensa personal — ambos notablemente más anchos que el blanco de
+// competencia IPSC/USPSA usado hasta el build .25. Se ensanchó
+// IPSC_TORSO_POLY (y las zonas A/C en la misma proporción) en
+// constants.js — ver ese archivo para las fuentes/medidas reales
+// investigadas. Se prueba con zoneAt(): un punto que quedaba afuera del
+// torso viejo (por el hombro angosto de antes) ahora da 'D' (torso), no
+// null — confirma el ensanche real, no solo un cambio cosmético que no
+// afecte el hit-test.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -115,7 +127,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .25', bodyText.includes('build 2026-08-28.25'));
+  check('badge de build dice .26', bodyText.includes('build 2026-08-28.26'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -189,6 +201,20 @@ const { chromium } = require('playwright');
   // — así que sólo puede dar 'C' si zoneAt() está usando el rectángulo.
   const headShapeResult = await page.evaluate(() => Target.zoneAt(570, 123));
   check('zoneAt() confirma que la cabeza es un rectángulo, no un círculo', headShapeResult === 'C');
+
+  // ---- Torso más ancho, más parecido a un blanco de polígono real
+  // (nuevo en build .26) ---------------------------------------------------
+  // Pedido directo: "los blancos son muy distintos a los que encontras en
+  // un polígono, muy finos, no reales en relación a las dimensiones de un
+  // cuerpo real" — el hombro del torso pasó de x=322/678 (build .25) a
+  // x=295/705 (más ancho, inspirado en las proporciones del B-27 policial y
+  // siluetas genéricas de defensa personal que el usuario nombró — ver
+  // constants.js). (310,208) queda AFUERA del torso viejo (hombro en 322)
+  // pero ADENTRO del nuevo (hombro en 295) — si esto da 'D' (torso) en vez
+  // de null, confirma que el torso realmente se ensanchó y no quedó en el
+  // ancho angosto de antes.
+  const widerTorsoResult = await page.evaluate(() => Target.zoneAt(310, 208));
+  check('el torso se ensanchó (un punto que antes quedaba afuera del cuerpo ahora es parte del torso)', widerTorsoResult === 'D');
 
   // ---- Escalado por distancia simulada (nuevo en build .24) -------------
   // Pedido directo: "el blanco debería reducir su tamaño simulando que me
