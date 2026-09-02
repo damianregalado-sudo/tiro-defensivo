@@ -1,4 +1,4 @@
-// Smoke test for build 2026-08-28.19 — verifies (without camera/laser, which
+// Smoke test for build 2026-08-28.20 — verifies (without camera/laser, which
 // can't be simulated headlessly): no console errors on load, the two hidden
 // debug/JSON panels and the "Sobre esta app" technical footer are gone from
 // the visible page, the build badge is correct, the new flashScreen()
@@ -20,7 +20,14 @@
 // (la librería se carga de una CDN bloqueada acá, igual que jsPDF). New in
 // .19: el cartel de "actualización disponible" no aparece en la instalación
 // inicial, sí aparece ante un controllerchange posterior, y el botón
-// "Actualizar ahora" efectivamente recarga la página.
+// "Actualizar ahora" efectivamente recarga la página. New in .20: arrancar
+// una sesión de Puntería oculta el cartel "Drill completo" que hubiera
+// quedado de una sesión de Reacción anterior sobre el mismo blanco, y ese
+// cartel nunca bloquea toques (pointer-events:none) — bug real reportado:
+// "me sale el resultado del anterior sesión... no me registra los
+// impactos". No se puede probar acá, sin cámara real, que attemptRecognition()
+// ya no cambie el blanco activo en medio de una sesión de puntería (el otro
+// fix de este build) — queda verificado por revisión de código.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -43,7 +50,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .19', bodyText.includes('build 2026-08-28.19'));
+  check('badge de build dice .20', bodyText.includes('build 2026-08-28.20'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -174,6 +181,30 @@ const { chromium } = require('playwright');
   check('#drySide queda visible en Fuego Seco', dryScope.drySideVisible);
   check('#btnLock ("Activar cámara") queda habilitado', !dryScope.btnLockDisabled);
   check('mandar a Fuego Seco por primera vez no tira errores de consola', consoleErrors.length === consoleErrorsBeforeDry);
+
+  // ---- Regresión build .20: arrancar Puntería no debe dejar visible el
+  // cartel "Drill completo" de una sesión de Reacción anterior ------------
+  // Bug real reportado: "me sale el resultado del anterior sesión" — nada en
+  // el flujo de Puntería tocaba #dryPrompt, así que si se corría un drill de
+  // Reacción sobre el mismo blanco (sin volver a mandarlo a Fuego Seco) su
+  // cartel final se quedaba dibujado encima del video. Se simula el cartel
+  // sin necesitar cámara real (startPunteria() es puro DOM) y se confirma
+  // que arrancar la sesión de puntería lo oculta.
+  await page.evaluate(() => {
+    const banner = document.getElementById('dryPrompt');
+    banner.style.display = '';
+    banner.innerHTML = 'Drill completo — 3/8 aciertos';
+  });
+  await page.evaluate(() => DryFire.startPunteria());
+  const punteriaBannerHidden = await page.evaluate(() => document.getElementById('dryPrompt').style.display === 'none');
+  check('iniciar sesión de puntería oculta el cartel de la sesión de Reacción anterior', punteriaBannerHidden);
+  await page.evaluate(() => DryFire.stopPunteria());
+
+  // El cartel tampoco debe poder comerse toques manuales sobre el video —
+  // nunca tiene botones adentro, así que pointer-events:none es siempre
+  // seguro (parte del mismo reporte: "no me registra los impactos").
+  const bannerPointerEvents = await page.evaluate(() => getComputedStyle(document.getElementById('dryPrompt')).pointerEvents);
+  check('el cartel de consigna/resultado no bloquea toques (pointer-events:none)', bannerPointerEvents === 'none');
 
   // ---- Compartir blanco por QR/enlace (nuevo en build .18) --------------
   // No se puede probar el DIBUJO del QR acá (la librería se carga de una

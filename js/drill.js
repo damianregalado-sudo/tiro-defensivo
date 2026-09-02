@@ -287,6 +287,15 @@ const DryFire = (() => {
     $('#btnNewPunteriaSerie').style.display = '';
     $('#btnStopPunteria').style.display = '';
     $('#punteriaLogBody').innerHTML = '';
+    // Build .20: si antes de esto se corrió un drill de Reacción sobre el
+    // MISMO blanco (sin volver a mandarlo a Fuego Seco, que es lo único que
+    // reconstruye #dryPrompt desde cero en ensureScope()), su cartel de
+    // "Drill completo — X/Y aciertos" se queda dibujado y visible — nada en
+    // el flujo de Puntería lo tocaba. Reportado directamente: "me sale el
+    // resultado del anterior sesión". Esto lo limpia al arrancar una sesión
+    // de puntería nueva.
+    const banner = $('#dryPrompt');
+    if (banner) banner.style.display = 'none';
     updatePunteriaStats();
   }
 
@@ -657,7 +666,18 @@ const DryFire = (() => {
   // the target-generator tab remains the fallback either way.
   function attemptRecognition() {
     if (recognizeDone || !currentFrameMat) return;
-    if (drill) return; // don't swap the target mid-drill
+    // Build .20: antes esto solo chequeaba `drill` — una sesión de puntería
+    // (family==='ipsc') podía quedar corriendo mientras el escaneo óptico
+    // seguía intentando leer el metatag de fondo (dura hasta RECOGNIZE_BUDGET
+    // cuadros), y si en el medio "reconocía" otro blanco guardado (por
+    // ejemplo si la cámara agarra de reojo otra hoja impresa cerca, o un
+    // metatag ambiguo), App.recognizeTarget() cambiaba el blanco activo A
+    // MITAD DE LA SESIÓN — el reportado real: practicando Puntería con un
+    // blanco IPSC, de repente aparecía cargado un blanco de "figuras de
+    // colores" (familia Reacción) distinto. El comentario original ("don't
+    // swap the target mid-drill") vale exactamente igual para una sesión de
+    // puntería activa, así que ahora también la protege.
+    if (drill || punteria) return; // don't swap the target mid-drill/puntería
     recognizeAttempts++;
     const decoded = Vision.decodeMetatag(currentFrameMat);
     const pill = $('#dryRecogState');

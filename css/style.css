@@ -212,6 +212,13 @@ canvas{display:block; border-radius:2px; max-width:100%;}
   position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-family:'Rajdhani',sans-serif; font-weight:700;
   font-size:20px; letter-spacing:1px; padding:9px 20px; border-radius:10px; background:rgba(16,18,22,.88);
   border:1px solid var(--accent); color:var(--accent); text-align:center; min-width:200px; backdrop-filter:blur(3px); z-index:6;
+  /* Build .20: nunca tiene botones ni nada clickeable adentro — es puro
+     texto informativo (consigna, "¡YA!", resultado de ronda/drill). Sin
+     esto, se comía los toques manuales sobre #dryOverlay que caían debajo
+     suyo (queda arriba en z-index, sobre el centro-abajo del video) —
+     parte de "no me registra los impactos" cuando el cartel de una ronda
+     anterior seguía visible sobre el blanco. */
+  pointer-events:none;
 }
 .prompt-banner .rt{display:block; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--text-dim); font-weight:400; letter-spacing:0; margin-top:2px;}
 
