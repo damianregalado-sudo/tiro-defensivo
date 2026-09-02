@@ -245,23 +245,7 @@ const DryFire = (() => {
     resetPunteriaUi();
     const wrap = $('#dryScopeWrap');
     wrap.innerHTML = `
-      <div class="scope-hud">
-        <span class="pill" id="dryHudCam">CÁMARA: APAGADA</span>
-        <span class="pill mono">${target.pageSize} · ${target.mode} · #${target.id}</span>
-        <span class="pill" id="dryRecogState" style="display:none;"></span>
-        <button class="pill" id="dryTorchBtn" style="display:none;cursor:pointer;border:1px solid var(--border);background:none;pointer-events:auto;">🔦 Flash</button>
-        <button class="pill" id="dryDebugToggle" style="cursor:pointer;border:1px solid var(--border);background:none;pointer-events:auto;">🔧 Diagnóstico</button>
-      </div>
-      <!-- margin-top clears the .scope-hud pills, which float
-           position:absolute over the top-left of the camera view (by
-           design, so camera state is visible over the live feed) — without
-           this the debug panel's first lines used to render right under
-           those pills, unreadable behind the "Diagnóstico" button. Sized
-           for the worst case (state + pageSize + recognition pill +
-           flash-toggle pill (build .21, only shown when the device supports
-           it) + the debug button itself, all 5 stacked — see .scope-hud
-           flex-direction:column in css/style.css). -->
-      <pre class="mono" id="dryDebugPanel" style="display:none;margin:158px 0 10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;background:rgba(0,0,0,.25);border-radius:6px;padding:8px;"></pre>
+      <pre class="mono" id="dryDebugPanel" style="display:none;margin:0 0 10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;background:rgba(0,0,0,.25);border-radius:6px;padding:8px;"></pre>
       <!-- Build .22: dryVideo/searchWrap/lockedWrap/camHint/prompt/zoomCtrl
            used to be direct children of .scope (position:relative), same as
            #dryDebugPanel above. That meant #dryPrompt and #dryZoomCtrl
@@ -287,6 +271,21 @@ const DryFire = (() => {
            #dryPrompt/#dryZoomCtrl a containing block sized only by the
            video content, independent of how tall the debug panel gets. -->
       <div style="position:relative;" id="dryVideoWrap">
+        <!-- Build .24: .scope-hud used to be its own sibling here, absolutely
+             positioned top:12px;left:12px over whatever was underneath —
+             which in practice meant it floated right on top of the target's
+             head/upper zone, reported directly: "eso me tapa el blanco...
+             no veo donde impacta en la cabeza". Now it's a normal (non-
+             floating) row, the FIRST thing inside dryVideoWrap, so it pushes
+             the video down below itself instead of covering it — see
+             .scope-hud in css/style.css. -->
+        <div class="scope-hud">
+          <span class="pill" id="dryHudCam">CÁMARA: APAGADA</span>
+          <span class="pill mono">${target.pageSize} · ${target.mode} · #${target.id}</span>
+          <span class="pill" id="dryRecogState" style="display:none;"></span>
+          <button class="pill" id="dryTorchBtn" style="display:none;cursor:pointer;border:1px solid var(--border);background:none;">🔦 Flash</button>
+          <button class="pill" id="dryDebugToggle" style="cursor:pointer;border:1px solid var(--border);background:none;">🔧 Diagnóstico</button>
+        </div>
         <video id="dryVideo" autoplay playsinline muted style="display:none;"></video>
         <div style="position:relative; display:none;" id="drySearchWrap">
           <canvas id="drySearchPreview" class="overlay" style="position:static; cursor:default;"></canvas>
@@ -381,7 +380,12 @@ const DryFire = (() => {
 
   function registerPunteriaHit(gx, gy, source) {
     if (!punteria || !punteria.active) return;
-    const zone = Target.zoneAt(gx, gy);
+    // Build .24: el factor de distancia simulada (ver Target.distScaleOf)
+    // hace que la silueta pueda salir impresa más chica que el tamaño
+    // completo — el hit-test tiene que evaluarse contra ESA silueta, no
+    // contra la de tamaño real, o un disparo bien puesto en el pecho de un
+    // blanco achicado calificaría como "fuera" por goleada.
+    const zone = Target.zoneAt(gx, gy, Target.distScaleOf(target));
     const key = zone || 'miss';
     punteria.shots.push({ gx, gy, zone, source });
     punteria.tally[key] = (punteria.tally[key] || 0) + 1;

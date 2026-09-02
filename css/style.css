@@ -206,7 +206,22 @@ canvas{display:block; border-radius:2px; max-width:100%;}
    (#drySearchGuide/#liveSearchGuide) already had an inline top:0;left:0
    override for the same reason — this makes the LOCKED-phase one match. */
 .scope canvas.overlay{position:absolute; top:0; left:0; cursor:crosshair;}
-.scope-hud{position:absolute; top:12px; left:12px; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-dim); display:flex; flex-direction:column; gap:4px; pointer-events:none; z-index:5;}
+/* Build .24: era position:absolute; top:12px;left:12px — flotaba encima de
+   la ESQUINA SUPERIOR IZQUIERDA de lo que hubiera debajo, que en la
+   práctica es justo donde cae la cabeza de la silueta o la parte de arriba
+   del blanco impreso. Reportado directamente con una captura: "eso me tapa
+   el blanco... no veo donde impacta en la cabeza". Ahora es una fila normal
+   (no flotante) que empuja el video hacia abajo en vez de taparlo — ver
+   dryVideoWrap/liveScopeWrap en drill.js/livefire.js, donde este bloque
+   pasó a ser el PRIMER hijo, antes del video/canvas, en vez de un overlay
+   posicionado aparte. flex-wrap para que, si hay muchas pastillas juntas
+   (cámara + blanco + reconocido + flash + diagnóstico), pasen a una segunda
+   línea en vez de recortarse o superponerse. pointer-events se levanta acá
+   (antes estaba en 'none' porque, siendo un overlay, no debía comerse
+   toques del video de abajo) — ahora que estos son sus propios botones en
+   flujo normal, si necesitan recibir clicks lo hacen ellos mismos como
+   cualquier otro botón de la página. */
+.scope-hud{display:flex; flex-wrap:wrap; gap:6px; padding-bottom:10px; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-dim);}
 .scope-hud .row{display:flex; gap:6px; align-items:center;}
 .prompt-banner{
   position:absolute; bottom:12px; left:50%; transform:translateX(-50%); font-family:'Rajdhani',sans-serif; font-weight:700;

@@ -73,13 +73,66 @@ const Target = (() => {
     }
   }
 
+  // Build .24: "distancia física diseñada" vs. "distancia simulada" — el
+  // punto entero de esos dos campos, tal como Damian los pidió directamente,
+  // es poder pararte a 2-3m en tu casa y que el blanco impreso SE VEA como
+  // si estuvieras a 15m de verdad (el tamaño angular real que tendría a esa
+  // distancia). Hasta este build esos dos números se guardaban, se
+  // mostraban impresos y viajaban en el código/metatag — pero nunca se
+  // usaban para achicar nada: el blanco salía siempre al mismo tamaño sin
+  // importar qué pusieras acá. distScaleOf() es la pieza que faltaba: la
+  // proporción por la que hay que achicar la geometría (silueta IPSC o
+  // figuras de Reacción) para que el ángulo visual sea el correcto. Un
+  // factor de 1 = tamaño real (sin achicar) — que es lo que ya pasaba
+  // antes, así que un blanco existente sigue viéndose exactamente igual.
+  // Solo aplica en modo DRY: en Fuego Real disparás a la distancia física
+  // real, no hay nada que simular (ver la línea de distSimulated en build()
+  // más abajo, que ya fuerza distSimulated=distDesigned en LIVE).
+  // Clamp: nunca agranda más allá del tamaño real (min 1 — si alguien pone
+  // una distancia simulada MENOR a la física, no tiene sentido agrandar el
+  // blanco más allá de su tamaño real de diseño) ni lo achica más de un
+  // 15% (una silueta más chica que eso deja de tener lugar para las zonas
+  // A/C o las figuras sin que se pisen entre ellas).
+  function distScaleOf(t) {
+    if (!t || t.mode !== 'DRY') return 1;
+    const d = Number(t.distDesigned), s = Number(t.distSimulated);
+    if (!Number.isFinite(d) || !Number.isFinite(s) || d <= 0 || s <= 0) return 1;
+    return clamp(d / s, 0.15, 1);
+  }
+
+  // Achica un punto en unidades de grilla hacia el centro (GRID/2, GRID/2)
+  // por `factor` — factor=1 lo deja igual. Usado tanto para la silueta IPSC
+  // (ver scaledIpscZones) como para las figuras de Reacción (ver build()).
+  function scaleTowardCenter(v, factor) {
+    return GRID / 2 + (v - GRID / 2) * factor;
+  }
+
+  // Versión escalada de las 4 zonas IPSC fijas (constants.js) — factor=1
+  // devuelve las mismas zonas de siempre. zoneAt()/drawIpscSilhouette()/
+  // ipscPdf() usan esto en vez de leer IPSC_HEAD/IPSC_ZONE_A/etc.
+  // directamente, así que las tres quedan consistentes automáticamente:
+  // lo que se DIBUJA es exactamente contra lo que se hace HIT-TEST.
+  function scaledIpscZones(factor) {
+    if (factor === 1) {
+      return { torso: IPSC_TORSO_POLY, head: IPSC_HEAD, zoneA: IPSC_ZONE_A, zoneC: IPSC_ZONE_C, headZoneA: IPSC_HEAD_ZONE_A };
+    }
+    const pt = (p) => ({ x: scaleTowardCenter(p.x, factor), y: scaleTowardCenter(p.y, factor) });
+    const rect = (r) => ({ cx: scaleTowardCenter(r.cx, factor), cy: scaleTowardCenter(r.cy, factor), w: r.w * factor, h: r.h * factor, r: r.r * factor });
+    return {
+      torso: IPSC_TORSO_POLY.map(pt),
+      head: rect(IPSC_HEAD),
+      zoneA: rect(IPSC_ZONE_A),
+      zoneC: rect(IPSC_ZONE_C),
+      headZoneA: rect(IPSC_HEAD_ZONE_A),
+    };
+  }
+
   function build(config) {
     const { pageSize, mode, distDesigned, distSimulated, shapeCount, family, includeQr } = config;
     const fam = family === 'ipsc' ? 'ipsc' : 'reaction';
-    return {
-      // 16-bit id, printed into the metatag, is how the camera later
-      // recognizes WHICH saved target it's looking at — see encodeBits/
-      // decodeBits below.
+    const t = {
+      // 16-bit id, printed into el metatag, es cómo la cámara reconoce
+      // luego QUÉ blanco guardado está mirando — ver encodeBits/decodeBits.
       id: randInt(1, 65535),
       pageSize, mode, family: fam,
       distDesigned,
@@ -99,6 +152,24 @@ const Target = (() => {
       qr: !!includeQr,
       createdAt: Date.now(),
     };
+    // Achica las figuras de Reacción hacia el centro de la grilla según la
+    // distancia simulada — ver el comentario grande de distScaleOf() más
+    // arriba. Se hace ACÁ, sobre las coordenadas ya generadas, en vez de
+    // pasarle el factor a generateShapes(): un escalado uniforme alrededor
+    // del mismo centro preserva las distancias RELATIVAS entre figuras (y
+    // entre cada figura y los bordes/fiduciales) exactamente en la misma
+    // proporción, así que no hace falta volver a correr la lógica de
+    // colocación/anti-superposición — ya viene garantizada por construcción.
+    const scale = distScaleOf(t);
+    if (scale !== 1 && t.shapes.length) {
+      t.shapes = t.shapes.map(s => ({
+        ...s,
+        cx: scaleTowardCenter(s.cx, scale),
+        cy: scaleTowardCenter(s.cy, scale),
+        r: s.r * scale,
+      }));
+    }
+    return t;
   }
 
   // ---- Compartir blanco (código QR / enlace) — build .18 --------------------
@@ -309,12 +380,18 @@ const Target = (() => {
   // no hay una zona D separada para la cabeza en esta versión (simplificación
   // deliberada: un blanco real de competencia sí la tiene, pero no encontré
   // una medida oficial publicada para copiarla).
-  function zoneAt(gx, gy) {
-    if (pointInRect(gx, gy, IPSC_HEAD_ZONE_A)) return 'A';
-    if (pointInCircle(gx, gy, IPSC_HEAD)) return 'C';
-    if (pointInRect(gx, gy, IPSC_ZONE_A)) return 'A';
-    if (pointInRect(gx, gy, IPSC_ZONE_C)) return 'C';
-    if (pointInPolygon(gx, gy, IPSC_TORSO_POLY)) return 'D';
+  // Build .24: `factor` (ver distScaleOf() más arriba) escala las 4 zonas
+  // antes de probar el punto contra ellas — así un blanco impreso más chico
+  // (distancia simulada) se evalúa contra SU silueta, más chica, no contra
+  // la de tamaño completo. factor=1 (el default, y lo único que existía
+  // antes de este build) se comporta exactamente igual que siempre.
+  function zoneAt(gx, gy, factor) {
+    const z = scaledIpscZones(factor === undefined ? 1 : factor);
+    if (pointInRect(gx, gy, z.headZoneA)) return 'A';
+    if (pointInRect(gx, gy, z.head)) return 'C';
+    if (pointInRect(gx, gy, z.zoneA)) return 'A';
+    if (pointInRect(gx, gy, z.zoneC)) return 'C';
+    if (pointInPolygon(gx, gy, z.torso)) return 'D';
     return null;
   }
 
@@ -323,30 +400,38 @@ const Target = (() => {
   // view, safeX/safeY for the print-preview canvas). outline=true draws
   // stroke-only (silueta transparente) for overlaying on the live camera
   // feed, same rationale as drawShape's outline mode.
-  function drawIpscSilhouette(ctx, sx, sy, originX, originY, outline) {
+  function drawIpscSilhouette(ctx, sx, sy, originX, originY, outline, distFactor) {
     const toPx = (gx, gy) => [originX + gx * sx, originY + gy * sy];
     const scale = (sx + sy) / 2;
+    const z = scaledIpscZones(distFactor === undefined ? 1 : distFactor);
     ctx.save();
     ctx.beginPath();
-    IPSC_TORSO_POLY.forEach((p, i) => {
+    z.torso.forEach((p, i) => {
       const [px, py] = toPx(p.x, p.y);
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     });
     ctx.closePath();
-    const [hx, hy] = toPx(IPSC_HEAD.cx, IPSC_HEAD.cy);
-    const headR = IPSC_HEAD.r * scale;
+    // Cabeza: bloque rectangular redondeado (cabeza+cuello), no un círculo —
+    // así son los blancos IPSC/USPSA reales (ver constants.js/README).
+    const [headX, headY] = toPx(z.head.cx - z.head.w / 2, z.head.cy - z.head.h / 2);
+    const headW = z.head.w * sx, headH = z.head.h * sy, headRad = z.head.r * scale;
+    const drawHeadPath = () => {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(headX, headY, headW, headH, headRad);
+      else ctx.rect(headX, headY, headW, headH); // fallback si el navegador no soporta roundRect
+    };
     if (outline) {
       ctx.fillStyle = 'transparent';
       ctx.strokeStyle = '#ff7a1a';
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.beginPath(); ctx.arc(hx, hy, headR, 0, Math.PI * 2); ctx.stroke();
+      drawHeadPath(); ctx.stroke();
     } else {
       ctx.fillStyle = '#c9a876';
       ctx.strokeStyle = '#3a3126';
       ctx.lineWidth = 2;
       ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.arc(hx, hy, headR, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      drawHeadPath(); ctx.fill(); ctx.stroke();
     }
     // Líneas de zona A/C — punteadas, siempre visibles (aun en modo outline)
     // para que el tirador vea contra qué zona se está evaluando cada
@@ -367,31 +452,33 @@ const Target = (() => {
     };
     const zoneLineColor = outline ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.4)';
     const zoneLineColorA = outline ? 'rgba(255,255,255,.8)' : 'rgba(0,0,0,.6)';
-    drawZoneRect(IPSC_ZONE_C, [6, 4], zoneLineColor);
-    drawZoneRect(IPSC_ZONE_A, [3, 3], zoneLineColorA);
-    drawZoneRect(IPSC_HEAD_ZONE_A, [3, 3], zoneLineColorA);
+    drawZoneRect(z.zoneC, [6, 4], zoneLineColor);
+    drawZoneRect(z.zoneA, [3, 3], zoneLineColorA);
+    drawZoneRect(z.headZoneA, [3, 3], zoneLineColorA);
     ctx.restore();
   }
 
-  function ipscPdf(doc, safeX, safeY, sx, sy) {
+  function ipscPdf(doc, safeX, safeY, sx, sy, distFactor) {
     const toXY = (gx, gy) => [safeX + gx * sx, safeY + gy * sy];
     const scale = (sx + sy) / 2;
-    const pts = IPSC_TORSO_POLY.map(p => toXY(p.x, p.y));
+    const z = scaledIpscZones(distFactor === undefined ? 1 : distFactor);
+    const pts = z.torso.map(p => toXY(p.x, p.y));
     const deltas = [];
     for (let i = 1; i < pts.length; i++) deltas.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
     doc.setFillColor(201, 168, 118);
     doc.setDrawColor(58, 49, 38);
     doc.lines(deltas, pts[0][0], pts[0][1], [1, 1], 'FD', true);
-    const [hx, hy] = toXY(IPSC_HEAD.cx, IPSC_HEAD.cy);
-    doc.circle(hx, hy, IPSC_HEAD.r * scale, 'FD');
+    // Cabeza: bloque rectangular redondeado (ver drawIpscSilhouette arriba
+    // para la razón — blancos IPSC/USPSA reales no tienen cabeza redonda).
+    doc.roundedRect(safeX + (z.head.cx - z.head.w / 2) * sx, safeY + (z.head.cy - z.head.h / 2) * sy, z.head.w * sx, z.head.h * sy, z.head.r * scale, z.head.r * scale, 'FD');
     doc.setDrawColor(120);
     const drawRect = (r, dash) => {
       doc.setLineDashPattern(dash, 0);
       doc.roundedRect(safeX + (r.cx - r.w / 2) * sx, safeY + (r.cy - r.h / 2) * sy, r.w * sx, r.h * sy, r.r * scale, r.r * scale, 'D');
     };
-    drawRect(IPSC_ZONE_C, [3, 2]);
-    drawRect(IPSC_ZONE_A, [1.5, 1.5]);
-    drawRect(IPSC_HEAD_ZONE_A, [1.5, 1.5]);
+    drawRect(z.zoneC, [3, 2]);
+    drawRect(z.zoneA, [1.5, 1.5]);
+    drawRect(z.headZoneA, [1.5, 1.5]);
     doc.setLineDashPattern([], 0);
   }
 
@@ -553,7 +640,7 @@ const Target = (() => {
     drawFiducial(ctx, FIDUCIAL_MARGIN * sx, h - FIDUCIAL_MARGIN * sy, fid);
     drawFiducial(ctx, w - FIDUCIAL_MARGIN * sx, h - FIDUCIAL_MARGIN * sy, fid);
     if (target.family === 'ipsc') {
-      drawIpscSilhouette(ctx, sx, sy, 0, 0, outline);
+      drawIpscSilhouette(ctx, sx, sy, 0, 0, outline, distScaleOf(target));
     } else {
       target.shapes.forEach(s => drawShape(ctx, s, sx, sy, 0, 0, outline));
     }
@@ -594,7 +681,7 @@ const Target = (() => {
     drawFiducial(ctx, safeX + safeW - fm * sx, safeY + safeH - fm * sy, fid);
 
     if (target.family === 'ipsc') {
-      drawIpscSilhouette(ctx, sx, sy, safeX, safeY, false);
+      drawIpscSilhouette(ctx, sx, sy, safeX, safeY, false, distScaleOf(target));
     } else {
       target.shapes.forEach(s => drawShape(ctx, s, sx, sy, safeX, safeY));
     }
@@ -648,7 +735,11 @@ const Target = (() => {
     };
     if (t.family === 'ipsc') {
       base.targetType = 'puntería (silueta con zonas A/C/D, estilo competencia — no es un blanco oficial licenciado)';
-      base.zones = { head: IPSC_HEAD, headZoneA: IPSC_HEAD_ZONE_A, zoneA: IPSC_ZONE_A, zoneC: IPSC_ZONE_C, silhouette: IPSC_TORSO_POLY };
+      // Build .24: escaladas por distScaleOf(t) — igual que lo que
+      // realmente se dibuja/hit-testea para este blanco (ver zoneAt()),
+      // no las zonas de tamaño completo sin importar la distancia simulada.
+      const z = scaledIpscZones(distScaleOf(t));
+      base.zones = { head: z.head, headZoneA: z.headZoneA, zoneA: z.zoneA, zoneC: z.zoneC, silhouette: z.torso };
     } else {
       base.targetType = 'reacción (formas/colores/números)';
       base.zones = t.shapes.map(s => ({
@@ -695,7 +786,7 @@ const Target = (() => {
     fiducialPdf(safeX + spec.safeW - fm * sx, safeY + spec.safeH - fm * sy, fid);
 
     if (target.family === 'ipsc') {
-      ipscPdf(doc, safeX, safeY, sx, sy);
+      ipscPdf(doc, safeX, safeY, sx, sy, distScaleOf(target));
     } else {
       const colorRgb = {
         red: [229, 72, 77], blue: [74, 159, 224], yellow: [244, 196, 48], green: [69, 178, 107],
@@ -756,7 +847,7 @@ const Target = (() => {
   return {
     generateShapes, equationForNumber, build, metatagBits, encodeBits, decodeBits,
     drawFiducial, drawShape, drawGrid, drawPrintPreview, toJson, exportPdf,
-    zoneAt, drawIpscSilhouette,
+    zoneAt, drawIpscSilhouette, distScaleOf,
     encodeShareCode, decodeShareCode, buildShareUrl,
   };
 })();

@@ -51,30 +51,41 @@ const LiveFire = (() => {
     $('#liveStatsIpsc').style.display = target.family === 'ipsc' ? '' : 'none';
     const wrap = $('#liveScopeWrap');
     wrap.innerHTML = `
-      <div class="scope-hud">
-        <span class="pill" id="liveHudCam">CÁMARA: APAGADA</span>
-        <span class="pill mono" id="liveHudTarget">${target.pageSize} · 1:1 · #${target.id}</span>
-        <span class="pill" id="liveRecogState" style="display:none;"></span>
-        <button class="pill" id="liveTorchBtn" style="display:none;cursor:pointer;border:1px solid var(--border);background:none;pointer-events:auto;">🔦 Flash</button>
-        <select class="pill" id="liveTargetPicker" style="cursor:pointer;pointer-events:auto;"></select>
-      </div>
-      <video id="liveVideo" autoplay playsinline muted style="display:none;"></video>
-      <div style="position:relative; display:none;" id="liveSearchWrap">
-        <canvas id="liveSearchPreview" class="overlay" style="position:static; cursor:default;"></canvas>
-        <canvas id="liveSearchGuide" class="overlay" style="top:0; left:0;"></canvas>
-      </div>
-      <div style="position:relative; display:none;" id="liveLockedWrap">
-        <canvas id="liveOverlay" class="overlay"></canvas>
-      </div>
-      <div class="empty-hint" id="liveCamHint">
-        <span class="big">📷</span>
-        Activá la cámara apuntando al blanco impreso en el rango.
-      </div>
-      <div class="zoom-ctrl" id="liveZoomCtrl" style="display:none;">
-        <button class="zoom-btn" id="liveZoomOut">－</button>
-        <input type="range" id="liveZoomSlider" min="1" max="4" step="0.25" value="1">
-        <button class="zoom-btn" id="liveZoomIn">＋</button>
-        <span class="zoom-val" id="liveZoomVal">1.0×</span>
+      <!-- Build .24: .scope-hud used to be position:absolute, floating on
+           top of whatever the camera was showing — same bug reported
+           directly for Fuego Seco ("eso me tapa el blanco... no veo donde
+           impacta"), present here too since it's the same CSS class. Now
+           it's a normal row, wrapped together with the video/canvas in
+           liveVideoWrap so it stacks ABOVE the video instead of overlaying
+           it — #liveScopeWrap itself is a flex ROW (see .scope in
+           style.css), so without this wrap the hud row and the video would
+           sit side by side instead of stacked. -->
+      <div style="position:relative;" id="liveVideoWrap">
+        <div class="scope-hud">
+          <span class="pill" id="liveHudCam">CÁMARA: APAGADA</span>
+          <span class="pill mono" id="liveHudTarget">${target.pageSize} · 1:1 · #${target.id}</span>
+          <span class="pill" id="liveRecogState" style="display:none;"></span>
+          <button class="pill" id="liveTorchBtn" style="display:none;cursor:pointer;border:1px solid var(--border);background:none;">🔦 Flash</button>
+          <select class="pill" id="liveTargetPicker" style="cursor:pointer;"></select>
+        </div>
+        <video id="liveVideo" autoplay playsinline muted style="display:none;"></video>
+        <div style="position:relative; display:none;" id="liveSearchWrap">
+          <canvas id="liveSearchPreview" class="overlay" style="position:static; cursor:default;"></canvas>
+          <canvas id="liveSearchGuide" class="overlay" style="top:0; left:0;"></canvas>
+        </div>
+        <div style="position:relative; display:none;" id="liveLockedWrap">
+          <canvas id="liveOverlay" class="overlay"></canvas>
+        </div>
+        <div class="empty-hint" id="liveCamHint">
+          <span class="big">📷</span>
+          Activá la cámara apuntando al blanco impreso en el rango.
+        </div>
+        <div class="zoom-ctrl" id="liveZoomCtrl" style="display:none;">
+          <button class="zoom-btn" id="liveZoomOut">－</button>
+          <input type="range" id="liveZoomSlider" min="1" max="4" step="0.25" value="1">
+          <button class="zoom-btn" id="liveZoomIn">＋</button>
+          <span class="zoom-val" id="liveZoomVal">1.0×</span>
+        </div>
       </div>
     `;
     // Set the warp destination's aspect ratio to match THIS target's actual
@@ -366,7 +377,10 @@ const LiveFire = (() => {
     const shot = { px, py, source };
     if (zoneTally) {
       const gx = px / Vision.WARP_W * GRID, gy = py / Vision.WARP_H * GRID;
-      const zone = Target.zoneAt(gx, gy);
+      // Build .24: Target.distScaleOf() siempre da 1 en Fuego Real (no hay
+      // "distancia simulada" en modo LIVE, se dispara a la distancia física
+      // real), pero se pasa igual por consistencia con drill.js.
+      const zone = Target.zoneAt(gx, gy, Target.distScaleOf(target));
       shot.zone = zone;
       const key = zone || 'miss';
       zoneTally[key] = (zoneTally[key] || 0) + 1;

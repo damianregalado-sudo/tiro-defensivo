@@ -88,7 +88,13 @@ function shapeRadiusRangeGrid(pageSize) {
 //
 // Proporción real 18.12:29.93 (ancho:alto) aplicada a una silueta de 590
 // unidades de alto (cabeza + torso) por ~357 de ancho en los hombros.
-const IPSC_HEAD = { cx: 500, cy: 123, r: 53 };
+//
+// La cabeza es un RECTÁNGULO redondeado (bloque cabeza+cuello), no un
+// círculo — se cambió en esta build a pedido directo ("sigue sin gustarme
+// el diseño del blanco, podes buscar mas ejemplos para mejorarlo"): en los
+// blancos IPSC/USPSA reales la cabeza es un bloque rectangular achatado,
+// nunca una cabeza redonda (ver README, build de esta mejora, con fuentes).
+const IPSC_HEAD = { cx: 500, cy: 123, w: 150, h: 110, r: 14 };
 // Cuadro de zona A de la cabeza — aproximado (ver nota arriba).
 const IPSC_HEAD_ZONE_A = { cx: 500, cy: 123, w: 50, h: 64, r: 12 };
 // Silueta del torso: hombros redondeados, un quiebre de cuello en el centro

@@ -58,6 +58,22 @@
 // SEGUNDO blanco a Fuego Seco en la misma sesión y confirmando que no tira
 // error de consola; la (2) simulando ambos botones de arranque habilitados
 // en un blanco de Puntería y mirando qué texto termina en la barra.
+// New in .24: dos pedidos directos más. (1) "eso me tapa el blanco... no
+// veo donde impacta en la cabeza" — .scope-hud (las pastillas de estado)
+// era position:absolute encima del video; ahora es una fila normal que
+// empuja el video hacia abajo. Se prueba con getBoundingClientRect(): la
+// fila de pastillas y el cuadro de video ya no se pisan verticalmente. (2)
+// "el blanco debería reducir su tamaño simulando que me alejo" — los campos
+// de distancia física/simulada se guardaban y mostraban pero nunca achicaban
+// nada; Target.distScaleOf(t) es la pieza nueva, y zoneAt()/
+// drawIpscSilhouette()/ipscPdf()/generateShapes() (vía build()) ahora la
+// usan. Se prueba sin cámara real: los valores de distScaleOf() para varios
+// casos (incluida la simulación al revés, que debe quedar en 1, no agrandar
+// el blanco), que el tamaño real dibujado en el canvas de preview cambia de
+// verdad entre un blanco 1:1 y uno con distancia simulada, y que zoneAt()
+// da un resultado distinto para el mismo punto según el factor de escala
+// (si no, el hit-test seguiría evaluando contra la silueta de tamaño
+// completo aunque el papel impreso sea más chico).
 const { chromium } = require('playwright');
 
 (async () => {
@@ -80,7 +96,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .23', bodyText.includes('build 2026-08-28.23'));
+  check('badge de build dice .24', bodyText.includes('build 2026-08-28.24'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -143,6 +159,85 @@ const { chromium } = require('playwright');
   check('zoneAt() en el pecho (zona A) da "A"', zoneResults.pechoAlto === 'A');
   check('zoneAt() cerca del borde del torso da "D"', zoneResults.torsoBorde === 'D');
   check('zoneAt() bien afuera del blanco da null', zoneResults.fuera === null);
+
+  // ---- Cabeza rectangular, no circular (nuevo en build .24) -------------
+  // Pedido directo: "sigue sin gustarme el diseño del blanco, podes buscar
+  // mas ejemplos para mejorarlo" — investigamos blancos IPSC/USPSA reales y
+  // encontramos que la cabeza es un bloque RECTANGULAR, no un círculo.
+  // (500,123) es el centro de IPSC_HEAD; (570,123) está a 70 unidades del
+  // centro — afuera del viejo círculo (r=53) pero adentro del nuevo
+  // rectángulo (medio-ancho=75) y afuera de IPSC_HEAD_ZONE_A (medio-ancho=25)
+  // — así que sólo puede dar 'C' si zoneAt() está usando el rectángulo.
+  const headShapeResult = await page.evaluate(() => Target.zoneAt(570, 123));
+  check('zoneAt() confirma que la cabeza es un rectángulo, no un círculo', headShapeResult === 'C');
+
+  // ---- Escalado por distancia simulada (nuevo en build .24) -------------
+  // Pedido directo: "el blanco debería reducir su tamaño simulando que me
+  // alejo" — parado cerca (distancia física) pero imprimiendo el blanco
+  // como si estuvieras lejos (distancia simulada). Antes de este build los
+  // dos campos se guardaban y mostraban pero nunca afectaban el tamaño real
+  // de nada.
+  const distScaleResults = await page.evaluate(() => ({
+    lejos: Target.distScaleOf({ mode: 'DRY', distDesigned: 3, distSimulated: 15 }),      // 3/15 = 0.2
+    igual: Target.distScaleOf({ mode: 'DRY', distDesigned: 15, distSimulated: 15 }),     // 1
+    // si "simulada" queda MENOR a la física, no tiene sentido agrandar el
+    // blanco más allá de su tamaño real — se clampea a 1, no a >1.
+    alRevesClampeado: Target.distScaleOf({ mode: 'DRY', distDesigned: 15, distSimulated: 3 }),
+    // en Fuego Real no hay "distancia simulada" — siempre 1, sin importar
+    // qué digan esos campos.
+    liveIgnorado: Target.distScaleOf({ mode: 'LIVE', distDesigned: 3, distSimulated: 15 }),
+  }));
+  check('distScaleOf(): 3m físicos simulando 15m da 0.2', Math.abs(distScaleResults.lejos - 0.2) < 0.001);
+  check('distScaleOf(): distancias iguales da 1 (tamaño real, sin achicar)', distScaleResults.igual === 1);
+  check('distScaleOf(): simulada menor a la física no agranda el blanco (clamp a 1)', distScaleResults.alRevesClampeado === 1);
+  check('distScaleOf(): en Fuego Real siempre da 1, sin importar los campos', distScaleResults.liveIgnorado === 1);
+
+  // El tamaño REAL dibujado en el canvas tiene que cambiar de verdad, no
+  // solo el número que devuelve distScaleOf() — se genera un blanco IPSC
+  // 1:1 y otro con distancia simulada, se dibuja el print-preview de cada
+  // uno, y se mide cuántos píxeles verticales ocupa el color de relleno de
+  // la silueta (#c9a876) en cada canvas.
+  const silhouetteSizes = await page.evaluate(() => {
+    function silhouetteBBoxHeight(target) {
+      const canvas = document.createElement('canvas');
+      Target.drawPrintPreview(canvas, target);
+      const ctx = canvas.getContext('2d');
+      const { width, height } = canvas;
+      const data = ctx.getImageData(0, 0, width, height).data;
+      let minY = height, maxY = 0;
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x += 2) {
+          const i = (y * width + x) * 4;
+          if (Math.abs(data[i] - 201) < 12 && Math.abs(data[i + 1] - 168) < 12 && Math.abs(data[i + 2] - 118) < 12) {
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      return maxY - minY;
+    }
+    const full = Target.build({ pageSize: 'A4', mode: 'DRY', distDesigned: 15, distSimulated: 15, family: 'ipsc' });
+    const scaled = Target.build({ pageSize: 'A4', mode: 'DRY', distDesigned: 3, distSimulated: 15, family: 'ipsc' });
+    return { full: silhouetteBBoxHeight(full), scaled: silhouetteBBoxHeight(scaled) };
+  });
+  check(
+    'un blanco con distancia simulada se dibuja notablemente más chico que uno 1:1',
+    silhouetteSizes.scaled < silhouetteSizes.full * 0.4
+  );
+
+  // El hit-test tiene que evaluarse contra la MISMA silueta achicada que se
+  // dibujó — si zoneAt() siguiera usando la geometría de tamaño completo,
+  // un disparo bien puesto en el pecho de un blanco impreso chico
+  // calificaría como "fuera" por goleada.
+  const scaledZoneResults = await page.evaluate(() => ({
+    centroConFactorCompleto: Target.zoneAt(500, 335, 1),   // pecho, tamaño completo → 'A'
+    mismoPuntoConFactorChico: Target.zoneAt(500, 335, 0.2), // mismo punto, silueta al 20% → ya no cae en zona A
+  }));
+  check('zoneAt() a tamaño completo detecta la zona A en el pecho', scaledZoneResults.centroConFactorCompleto === 'A');
+  check(
+    'zoneAt() con la silueta achicada da un resultado DISTINTO en ese mismo punto (ya no es zona A)',
+    scaledZoneResults.mismoPuntoConFactorChico !== 'A'
+  );
 
   // Selector de familia: cambiar a "Puntería (estilo IPSC)" debe ocultar la
   // cantidad de figuras (no aplica a esa familia) y mostrar la nota
@@ -262,6 +357,42 @@ const { chromium } = require('playwright');
   check(
     'mandar un SEGUNDO blanco a Fuego Real en la misma sesión no tira errores de consola',
     consoleErrors.length === consoleErrorsBeforeSecondLive
+  );
+
+  // ---- La fila de pastillas de estado ya no tapa el video (build .24) ---
+  // Reportado directamente con una captura: "eso me tapa el blanco... no
+  // veo donde impacta en la cabeza". .scope-hud era position:absolute
+  // encima del video — ahora es una fila normal que lo empuja hacia abajo.
+  // Se manda un blanco a Fuego Seco, se simula el video "bloqueado" (con un
+  // canvas base real, mismo patrón que las pruebas de arriba) y se
+  // confirma con getBoundingClientRect() que la fila de pastillas y el
+  // video ya no se superponen verticalmente.
+  await page.evaluate(() => App.setTab('target'));
+  await page.waitForTimeout(50);
+  await page.click('#btnGenerate');
+  await page.waitForTimeout(150);
+  await page.click('#btnSendDry');
+  await page.waitForTimeout(150);
+  const hudOverlapResult = await page.evaluate(() => {
+    const lockedWrap = document.getElementById('dryLockedWrap');
+    const hud = document.querySelector('#dryVideoWrap .scope-hud');
+    const base = Vision.warpCanvas || document.createElement('canvas');
+    base.width = Vision.WARP_W; base.height = Vision.WARP_H;
+    base.className = '';
+    lockedWrap.prepend(base);
+    lockedWrap.style.display = 'block';
+    document.getElementById('dryCamHint').style.display = 'none';
+    const hudRect = hud.getBoundingClientRect();
+    const videoRect = lockedWrap.getBoundingClientRect();
+    return {
+      hudBottom: hudRect.bottom,
+      videoTop: videoRect.top,
+      overlaps: !(hudRect.bottom <= videoRect.top || hudRect.top >= videoRect.bottom),
+    };
+  });
+  check(
+    'la fila de pastillas de estado ya NO se superpone con el video/blanco',
+    !hudOverlapResult.overlaps && hudOverlapResult.hudBottom <= hudOverlapResult.videoTop
   );
 
   // ---- Botón de flash/linterna (nuevo en build .21) ----------------------
