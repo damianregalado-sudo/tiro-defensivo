@@ -402,6 +402,14 @@ Además, revisando el código de reconocimiento óptico para este mismo reporte,
 
 *Nota honesta*: no pude probar el bug del reconocimiento óptico de punta a punta en este entorno (no hay cámara real acá), así que ese arreglo lo verifiqué por revisión de código, no con una prueba automatizada — el de la banda "Drill completo" pegada sí lo pude reproducir y confirmar arreglado con una prueba.
 
+**Build 2026-08-28.21 — botón de flash/linterna para encuadrar y calibrar en poca luz, que después se apaga a mano para no generar falsos positivos.**
+
+Pediste directamente: a veces una punta del blanco no se detectaba hasta iluminar bien esa zona, al menos para encuadrar y calibrar — pero una vez calibrado, apagar el flash de nuevo para que no genere falsos positivos (la luz del flash reflejando en el papel es exactamente el tipo de "mancha brillante y localizada" que el detector de láser busca — ver `LASER_DESTELLO_BRIGHTNESS_MIN` en `vision.js`).
+
+Ahora, mientras la cámara está activa (tanto en Fuego Seco como en Fuego Real), aparece un botón "🔦 Flash" junto al de "🔧 Diagnóstico" que prende/apaga la linterna del teléfono. Es manual en los dos sentidos — vos decidís cuándo encuadrar con luz y cuándo apagarla para tirar, la app no lo hace sola en ningún momento. El botón solo aparece en teléfonos/navegadores que realmente exponen el control de linterna a la cámara (mismo patrón de feature-detection que ya usan el zoom óptico y el ajuste de exposición) — si tu teléfono no lo soporta, el botón simplemente no aparece en vez de mostrar algo roto que no hace nada.
+
+*Nota honesta*: no hay cámara real en este entorno de desarrollo, así que no pude probar de punta a punta que la linterna prenda de verdad en un teléfono — sí verifiqué con una prueba automatizada que el botón arranca oculto, y que la detección de la función no rompe nada cuando el dispositivo no la soporta (que es exactamente lo que pasa acá). Avisame si al probarlo en tu celular el botón no aparece o no prende la luz — puede ser que ese modelo/navegador específico no exponga el control (pasa en algunos equipos).
+
 ## Estructura del proyecto
 
 ```

@@ -48,6 +48,7 @@ const LiveFire = (() => {
         <span class="pill" id="liveHudCam">CÁMARA: APAGADA</span>
         <span class="pill mono" id="liveHudTarget">${target.pageSize} · 1:1 · #${target.id}</span>
         <span class="pill" id="liveRecogState" style="display:none;"></span>
+        <button class="pill" id="liveTorchBtn" style="display:none;cursor:pointer;border:1px solid var(--border);background:none;pointer-events:auto;">🔦 Flash</button>
         <select class="pill" id="liveTargetPicker" style="cursor:pointer;pointer-events:auto;"></select>
       </div>
       <video id="liveVideo" autoplay playsinline muted style="display:none;"></video>
@@ -91,6 +92,22 @@ const LiveFire = (() => {
     // the refreshed list is what the shooter actually sees.
     $('#liveTargetPicker').addEventListener('mousedown', populateTargetPicker);
     $('#liveTargetPicker').addEventListener('change', onTargetPickerChange);
+    $('#liveTorchBtn').addEventListener('click', toggleTorch);
+  }
+
+  // Flash/torch toggle (build .21) — same rationale and feature-detected
+  // pattern as drill.js's version (used at range to light up a corner of the
+  // target that's hard to lock onto in low light, then turned back off
+  // before shooting so its own reflection can't be mistaken for a hit).
+  // Kept as its own local copy rather than shared code, matching how
+  // wireZoomControls is already duplicated per-file in this codebase.
+  async function toggleTorch() {
+    const info = Vision.getTorchInfo();
+    const applied = await Vision.setTorch(!info.on);
+    const btn = $('#liveTorchBtn');
+    if (!btn) return;
+    btn.classList.toggle('accent', applied);
+    btn.textContent = applied ? '🔦 Flash ENCENDIDO' : '🔦 Flash';
   }
 
   // Reported directly (with screenshots): at range, the metatag optical
@@ -166,6 +183,13 @@ const LiveFire = (() => {
     $('#liveSearchWrap').style.display = 'block';
     $('#liveZoomCtrl').style.display = '';
     $('#liveZoomSlider').min = Vision.ZOOM_MIN; $('#liveZoomSlider').max = Vision.ZOOM_MAX; $('#liveZoomSlider').step = Vision.ZOOM_STEP;
+    const torchBtn = $('#liveTorchBtn');
+    if (torchBtn) {
+      const torchInfo = Vision.getTorchInfo();
+      torchBtn.style.display = torchInfo.supported ? '' : 'none';
+      torchBtn.classList.remove('accent');
+      torchBtn.textContent = '🔦 Flash';
+    }
     if (!Vision.cvIsReady()) {
       $('#liveHudCam').textContent = 'CÁMARA: EN VIVO — cargando motor de visión…';
       await Vision.cvReady;
@@ -182,6 +206,7 @@ const LiveFire = (() => {
     $('#liveZoomCtrl') && ($('#liveZoomCtrl').style.display = 'none');
     $('#liveHudCam') && ($('#liveHudCam').textContent = 'CÁMARA: APAGADA');
     $('#liveRecogState') && ($('#liveRecogState').style.display = 'none');
+    $('#liveTorchBtn') && ($('#liveTorchBtn').style.display = 'none');
     recognizeAttempts = 0; recognizeDone = false;
   }
 

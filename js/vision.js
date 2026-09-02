@@ -239,6 +239,41 @@ const Vision = (() => {
   }
   function getZoomInfo() { return { supported: zoomCapability.supported, applied: hardwareZoomApplied, range: zoomCapability.supported ? { min: zoomCapability.min, max: zoomCapability.max } : null }; }
 
+  // Torch (phone's own flash/LED, used as a light) — build .21, requested
+  // directly: a corner of the printed target wasn't detectable in low light
+  // until it got lit up well enough to frame/lock onto, then the shooter
+  // wants it OFF again once locked so the flash doesn't add a bright
+  // reflection/hotspot on the paper that the laser-dot detector could
+  // mistake for a real shot. Manual, on/off, never automatic — same
+  // feature-detected pattern as the zoom/exposure controls above:
+  // `getCapabilities().torch` only exists on phones/browsers that actually
+  // expose it (mainly Chrome on Android with a rear camera that has an LED),
+  // so the toggle button only appears where it can actually do something.
+  // NOTE: unverified against real hardware (no camera in this dev sandbox).
+  let torchCapability = { supported: false };
+  let torchOn = false;
+  function detectTorchCapability(track) {
+    torchCapability = { supported: false };
+    torchOn = false;
+    try {
+      if (!track.getCapabilities) return;
+      const caps = track.getCapabilities();
+      if (!caps || !('torch' in caps)) return;
+      torchCapability = { supported: true };
+    } catch (err) { /* leave unsupported */ }
+  }
+  // Returns a Promise resolving to the torch's actual resulting state (not
+  // just "what was requested") — applyConstraints can fail (permission
+  // revoked mid-session, hardware busy) and the caller (the UI toggle
+  // button) needs to reflect what really happened, not assume success.
+  function setTorch(on) {
+    if (!torchCapability.supported || !currentTrack) return Promise.resolve(false);
+    return currentTrack.applyConstraints({ advanced: [{ torch: !!on }] })
+      .then(() => { torchOn = !!on; return torchOn; })
+      .catch(() => torchOn);
+  }
+  function getTorchInfo() { return { supported: torchCapability.supported, on: torchOn }; }
+
   // Changing zoom mid-search invalidates whatever "stable" streak was
   // building: cornersStable() only compares raw pixel positions between
   // consecutive search-canvas frames, with no idea that the zoom crop itself
@@ -320,7 +355,7 @@ const Vision = (() => {
     await video.play();
     const track = stream.getVideoTracks()[0];
     currentTrack = track || null;
-    if (track) { tryAdjustExposure(track); detectZoomCapability(track); applyHardwareZoom(); }
+    if (track) { tryAdjustExposure(track); detectZoomCapability(track); applyHardwareZoom(); detectTorchCapability(track); }
     acquireWakeLock();
     warpCanvas = document.createElement('canvas');
     warpCanvas.width = WARP_W; warpCanvas.height = WARP_H;
@@ -374,6 +409,12 @@ const Vision = (() => {
     currentTrack = null;
     zoomCapability = { supported: false, min: 1, max: 1, step: 0.1 };
     hardwareZoomApplied = false;
+    // The stream itself just got stopped (tracks above), which turns the
+    // physical LED off on its own — this just resets our own bookkeeping so
+    // a stale "torch is on" state doesn't survive into the next time the
+    // camera is activated.
+    torchCapability = { supported: false };
+    torchOn = false;
     releaseWakeLock();
   }
 
@@ -976,6 +1017,7 @@ const Vision = (() => {
     get WARP_W() { return WARP_W; },
     get WARP_H() { return WARP_H; },
     setZoom, getZoom, ZOOM_MIN, ZOOM_MAX, ZOOM_STEP,
+    setTorch, getTorchInfo,
     detectLaserInMat, grayFromMat, detectNewHole, decodeMetatag,
     HOLE_STABILITY_FRAMES,
     setDebug, getLastLaserDebug, getExposureInfo, getZoomInfo,

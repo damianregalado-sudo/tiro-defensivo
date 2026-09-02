@@ -229,6 +229,7 @@ const DryFire = (() => {
         <span class="pill" id="dryHudCam">CÁMARA: APAGADA</span>
         <span class="pill mono">${target.pageSize} · ${target.mode} · #${target.id}</span>
         <span class="pill" id="dryRecogState" style="display:none;"></span>
+        <button class="pill" id="dryTorchBtn" style="display:none;cursor:pointer;border:1px solid var(--border);background:none;pointer-events:auto;">🔦 Flash</button>
         <button class="pill" id="dryDebugToggle" style="cursor:pointer;border:1px solid var(--border);background:none;pointer-events:auto;">🔧 Diagnóstico</button>
       </div>
       <!-- margin-top clears the .scope-hud pills, which float
@@ -266,6 +267,7 @@ const DryFire = (() => {
     $('#btnStartPunteria').disabled = true;
     wireZoomControls('dry');
     $('#dryDebugToggle').addEventListener('click', toggleDebug);
+    $('#dryTorchBtn').addEventListener('click', () => toggleTorch('dry'));
   }
 
   // ---- Puntería (blanco family==='ipsc'): sesión continua sin consigna ----
@@ -379,6 +381,23 @@ const DryFire = (() => {
     if (!debugOn) { $('#dryDebugPanel').textContent = ''; lastRawHit = null; drawOverlay(); }
   }
 
+  // Flash/torch toggle (build .21) — requested directly: a corner of the
+  // printed target wasn't detectable in low light until it got lit up well
+  // enough to frame/lock onto; then turn it back off for the actual drill so
+  // the flash's own reflection off the paper can't be mistaken for a laser
+  // hit (see LASER_DESTELLO_* in vision.js — a bright, localized hotspot is
+  // exactly what the detector is looking for). Purely manual, never
+  // automatic, on purpose — the shooter decides when framing/calibrating
+  // ends and shooting begins, this app can't tell.
+  async function toggleTorch(prefix) {
+    const info = Vision.getTorchInfo();
+    const applied = await Vision.setTorch(!info.on);
+    const btn = $(`#${prefix}TorchBtn`);
+    if (!btn) return;
+    btn.classList.toggle('accent', applied);
+    btn.textContent = applied ? '🔦 Flash ENCENDIDO' : '🔦 Flash';
+  }
+
   function renderDebugPanel(text) {
     if (!debugOn) return;
     const el = $('#dryDebugPanel');
@@ -411,6 +430,13 @@ const DryFire = (() => {
     $('#dryZoomCtrl').style.display = '';
     $('#dryZoomSlider').min = Vision.ZOOM_MIN; $('#dryZoomSlider').max = Vision.ZOOM_MAX; $('#dryZoomSlider').step = Vision.ZOOM_STEP;
     $('#dryHudCam').textContent = Vision.cvIsReady() ? 'CÁMARA: EN VIVO' : 'CÁMARA: EN VIVO — cargando motor de visión…';
+    const torchBtn = $('#dryTorchBtn');
+    if (torchBtn) {
+      const torchInfo = Vision.getTorchInfo();
+      torchBtn.style.display = torchInfo.supported ? '' : 'none';
+      torchBtn.classList.remove('accent');
+      torchBtn.textContent = '🔦 Flash';
+    }
     $('#btnLock').disabled = false;
     $('#btnLock').textContent = 'Re-calibrar';
     // Used to require a second, separate tap ("Iniciar Auto-Lock") before
@@ -436,6 +462,7 @@ const DryFire = (() => {
     $('#dryHudCam') && ($('#dryHudCam').textContent = 'CÁMARA: APAGADA');
     $('#btnLock') && ($('#btnLock').textContent = 'Activar cámara');
     $('#dryRecogState') && ($('#dryRecogState').style.display = 'none');
+    $('#dryTorchBtn') && ($('#dryTorchBtn').style.display = 'none');
     recognizeAttempts = 0; recognizeDone = false;
     $('#btnStartDrill').disabled = true;
     $('#btnStartPunteria').disabled = true;

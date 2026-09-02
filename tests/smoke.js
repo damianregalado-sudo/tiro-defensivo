@@ -1,4 +1,4 @@
-// Smoke test for build 2026-08-28.20 — verifies (without camera/laser, which
+// Smoke test for build 2026-08-28.21 — verifies (without camera/laser, which
 // can't be simulated headlessly): no console errors on load, the two hidden
 // debug/JSON panels and the "Sobre esta app" technical footer are gone from
 // the visible page, the build badge is correct, the new flashScreen()
@@ -27,7 +27,12 @@
 // "me sale el resultado del anterior sesión... no me registra los
 // impactos". No se puede probar acá, sin cámara real, que attemptRecognition()
 // ya no cambie el blanco activo en medio de una sesión de puntería (el otro
-// fix de este build) — queda verificado por revisión de código.
+// fix de este build) — queda verificado por revisión de código. New in .21:
+// el botón de flash/linterna (Vision.getTorchInfo/setTorch) — sin cámara
+// real en este entorno no se puede probar que efectivamente prenda la luz,
+// pero sí que el feature-detection no rompe nada cuando el dispositivo no
+// expone torch (el caso de este entorno) y que el botón queda oculto en vez
+// de mostrarse roto/sin hacer nada.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -50,7 +55,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .20', bodyText.includes('build 2026-08-28.20'));
+  check('badge de build dice .21', bodyText.includes('build 2026-08-28.21'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -181,6 +186,24 @@ const { chromium } = require('playwright');
   check('#drySide queda visible en Fuego Seco', dryScope.drySideVisible);
   check('#btnLock ("Activar cámara") queda habilitado', !dryScope.btnLockDisabled);
   check('mandar a Fuego Seco por primera vez no tira errores de consola', consoleErrors.length === consoleErrorsBeforeDry);
+
+  // ---- Botón de flash/linterna (nuevo en build .21) ----------------------
+  // Sin cámara real en este entorno no se puede activar el stream (getUserMedia
+  // fallaría), así que esto solo cubre lo que SÍ se puede probar sin hardware:
+  // el botón existe en la plantilla y arranca oculto (el feature-detection
+  // real recién lo muestra si Vision.getTorchInfo().supported da true, algo
+  // que solo pasa con una cámara real de verdad), y la API de Vision no tira
+  // ninguna excepción cuando se la llama sin ninguna cámara activa — se
+  // degrada con calma a "no soportado" en vez de romper el resto de la app.
+  const torchBtnState = await page.evaluate(() => {
+    const btn = document.getElementById('dryTorchBtn');
+    return btn ? getComputedStyle(btn).display : 'no-existe';
+  });
+  check('#dryTorchBtn existe en la plantilla de Fuego Seco y arranca oculto', torchBtnState === 'none');
+  const torchInfoInitial = await page.evaluate(() => Vision.getTorchInfo());
+  check('Vision.getTorchInfo() sin cámara activa da supported:false', torchInfoInitial.supported === false);
+  const torchSetResult = await page.evaluate(() => Vision.setTorch(true));
+  check('Vision.setTorch() sin cámara activa no tira excepción y devuelve false', torchSetResult === false);
 
   // ---- Regresión build .20: arrancar Puntería no debe dejar visible el
   // cartel "Drill completo" de una sesión de Reacción anterior ------------
