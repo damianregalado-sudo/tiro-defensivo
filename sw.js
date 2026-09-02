@@ -13,7 +13,7 @@
 // strictly required for correctness anymore (network-first means updates
 // show up regardless), but it guarantees old cached entries get swept on
 // activate instead of accumulating forever.
-const CACHE_VERSION = 'v45';
+const CACHE_VERSION = 'v46';
 const CACHE = 'entrenatiro-' + CACHE_VERSION;
 const SHELL = [
   './', './index.html', './manifest.json',

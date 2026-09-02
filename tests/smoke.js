@@ -41,6 +41,23 @@
 // de la vista — reproducido acá sin cámara real (se puede: es puro CSS/DOM,
 // no depende de láser) comparando la posición de #dryPrompt relativa al
 // cuadro de video con Diagnóstico apagado vs. prendido con mucho texto.
+// New in .23: bug real reportado con captura de pantalla — en un blanco de
+// Puntería (IPSC) la barra flotante inferior mostraba "Iniciar Drill Mente-
+// Acción" en vez de "Iniciar sesión de puntería". Dos causas, una arriba de
+// la otra: (1) la de fondo, más grave — DryFire.ensureScope() (y su gemela
+// en livefire.js) buscaban `#dryEmpty`/`#liveEmpty`, un cartel que solo
+// existe en el HTML estático antes del primer blanco enviado; la PRIMERA
+// vez que corre, `wrap.innerHTML` lo borra, así que la SEGUNDA vez (y todas
+// las siguientes, o sea prácticamente cualquier sesión real) tiraba un
+// TypeError que cortaba la función en la primera línea, sin ningún error
+// visible — el toggle Reacción/Puntería, entre otras cosas, nunca se volvía
+// a ejecutar en toda la sesión. (2) encima, ctaSync() (la barra flotante)
+// miraba el style.display del BOTÓN en vez de si su contenedor padre estaba
+// oculto, así que aunque (1) no hubiera pasado, igual habría elegido mal.
+// Ambas se reproducen sin cámara real (puro DOM/CSS): la (1) mandando un
+// SEGUNDO blanco a Fuego Seco en la misma sesión y confirmando que no tira
+// error de consola; la (2) simulando ambos botones de arranque habilitados
+// en un blanco de Puntería y mirando qué texto termina en la barra.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -63,7 +80,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .22', bodyText.includes('build 2026-08-28.22'));
+  check('badge de build dice .23', bodyText.includes('build 2026-08-28.23'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -195,6 +212,58 @@ const { chromium } = require('playwright');
   check('#btnLock ("Activar cámara") queda habilitado', !dryScope.btnLockDisabled);
   check('mandar a Fuego Seco por primera vez no tira errores de consola', consoleErrors.length === consoleErrorsBeforeDry);
 
+  // ---- Regresión build .23: mandar un SEGUNDO blanco a Fuego Seco en la
+  // misma sesión no debe tirar una excepción silenciosa --------------------
+  // El bug de arriba (build .15b) fue sobre #dryPrompt en la PRIMERA llamada
+  // a ensureScope() de la sesión. Este es el mismo tipo de bug pero en la
+  // dirección opuesta: #dryEmpty (el cartel "Generá un blanco... y enviálo
+  // acá") solo existe en el HTML estático — la PRIMERA vez que ensureScope()
+  // corre, `wrap.innerHTML = ...` lo borra y lo reemplaza por la plantilla
+  // de cámara. Buscarlo de nuevo en la SEGUNDA llamada (y todas las
+  // siguientes) daba `$('#dryEmpty') === null`, y leer `.style` de eso
+  // tiraba un TypeError que cortaba ensureScope() en la primera línea —
+  // silencioso, sin alert ni nada visible, pero el resto de la función
+  // (el toggle Reacción/Puntería, el rearmado de #dryScopeWrap con el
+  // #dryTorchBtn nuevo, resetPunteriaUi()) nunca se ejecutaba de nuevo en
+  // toda la sesión. Se reproduce mandando un SEGUNDO blanco (de la otra
+  // familia, para que además se note si el toggle se aplicó) y confirmando
+  // que no aparece ningún error de consola nuevo.
+  const consoleErrorsBeforeSecondDry = consoleErrors.length;
+  await page.evaluate(() => App.setTab('target'));
+  await page.waitForTimeout(50);
+  await page.click('.family-btn[data-family="ipsc"]');
+  await page.waitForTimeout(50);
+  await page.click('#btnGenerate');
+  await page.waitForTimeout(150);
+  await page.click('#btnSendDry');
+  await page.waitForTimeout(150);
+  check(
+    'mandar un SEGUNDO blanco a Fuego Seco en la misma sesión no tira errores de consola',
+    consoleErrors.length === consoleErrorsBeforeSecondDry
+  );
+
+  // ---- Regresión build .23: el mismo bug de #dryEmpty existía calcado en
+  // livefire.js (#liveEmpty) para Fuego Real — misma prueba, otro botón. ---
+  await page.evaluate(() => App.setTab('target'));
+  await page.waitForTimeout(50);
+  await page.click('#btnGenerate');
+  await page.waitForTimeout(150);
+  const consoleErrorsBeforeFirstLive = consoleErrors.length;
+  await page.click('#btnSendLive');
+  await page.waitForTimeout(150);
+  check('mandar un blanco a Fuego Real no tira errores de consola', consoleErrors.length === consoleErrorsBeforeFirstLive);
+  const consoleErrorsBeforeSecondLive = consoleErrors.length;
+  await page.evaluate(() => App.setTab('target'));
+  await page.waitForTimeout(50);
+  await page.click('#btnGenerate');
+  await page.waitForTimeout(150);
+  await page.click('#btnSendLive');
+  await page.waitForTimeout(150);
+  check(
+    'mandar un SEGUNDO blanco a Fuego Real en la misma sesión no tira errores de consola',
+    consoleErrors.length === consoleErrorsBeforeSecondLive
+  );
+
   // ---- Botón de flash/linterna (nuevo en build .21) ----------------------
   // Sin cámara real en este entorno no se puede activar el stream (getUserMedia
   // fallaría), así que esto solo cubre lo que SÍ se puede probar sin hardware:
@@ -261,6 +330,41 @@ const { chromium } = require('playwright');
   check(
     'prender Diagnóstico no mueve el cartel de consigna/resultado lejos del video',
     Math.abs(gapWithDebugOn - gapWithDebugOff) < 1
+  );
+
+  // ---- Regresión build .23: la barra flotante inferior (.cta-bar) no debe
+  // mostrar "Iniciar Drill Mente-Acción" en un blanco de Puntería (IPSC) --
+  // Bug real reportado con captura de pantalla: en un blanco de Puntería
+  // (family==='ipsc', donde #drySideReaction queda oculto y solo se ve
+  // #drySideIpsc con "Iniciar sesión de puntería"), la barra fija de abajo
+  // igual mostraba "Iniciar Drill Mente-Acción". Causa: ctaSync() elegía
+  // qué botón espejar mirando `btn.style.display !== 'none'` — pero
+  // #btnStartDrill nunca tiene ESE estilo puesto en sí mismo, lo que se
+  // oculta es su contenedor padre (#drySideReaction). Se manda un blanco
+  // IPSC a Fuego Seco, se simula la cámara bloqueada (ambos botones de
+  // arranque habilitados, como pasa de verdad en ese momento) y se confirma
+  // que la barra flotante muestra el botón de Puntería, no el de Reacción.
+  await page.evaluate(() => App.setTab('target'));
+  await page.waitForTimeout(50);
+  await page.click('.family-btn[data-family="ipsc"]');
+  await page.waitForTimeout(50);
+  await page.click('#btnGenerate');
+  await page.waitForTimeout(150);
+  await page.click('#btnSendDry');
+  await page.waitForTimeout(150);
+  const ctaBarResult = await page.evaluate(() => {
+    document.getElementById('btnStartDrill').disabled = false;
+    document.getElementById('btnStartPunteria').disabled = false;
+    DryFire.setupCtaBar();
+    return {
+      drySideReactionHidden: getComputedStyle(document.getElementById('drySideReaction')).display === 'none',
+      ctaBtnText: document.getElementById('dryCtaBtn').textContent,
+    };
+  });
+  check('en un blanco de Puntería, #drySideReaction (Reacción) queda oculto', ctaBarResult.drySideReactionHidden);
+  check(
+    'la barra flotante de abajo muestra "Iniciar sesión de puntería", no "Iniciar Drill Mente-Acción"',
+    ctaBarResult.ctaBtnText.includes('puntería') && !ctaBarResult.ctaBtnText.includes('Mente-Acción')
   );
 
   // ---- Regresión build .20: arrancar Puntería no debe dejar visible el

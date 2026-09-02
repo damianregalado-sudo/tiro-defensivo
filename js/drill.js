@@ -198,7 +198,27 @@ const DryFire = (() => {
   function ensureScope() {
     target = App.currentTarget();
     if (!target) return;
-    $('#dryEmpty').style.display = 'none';
+    // Build .23: #dryEmpty ("Generá un blanco... y enviálo acá") only
+    // exists in index.html's STATIC markup — it's the placeholder shown
+    // before Fuego Seco has ever received a target. The very first time
+    // this function runs, `wrap.innerHTml` below replaces #dryScopeWrap's
+    // whole content with the camera/scope template, which does NOT include
+    // #dryEmpty. So on the SECOND (and every later) target sent to Fuego
+    // Seco in the same session, `$('#dryEmpty')` returned null here and
+    // `.style.display` on it threw a TypeError — which aborted the entire
+    // rest of ensureScope() right at this line, every single time. That's
+    // a much bigger bug than it looks: it meant the isIpsc toggle just
+    // below (line ~211) never ran again either, so #drySideReaction/
+    // #drySideIpsc stayed stuck showing whichever family was active on the
+    // FIRST target of the session — exactly the "Iniciar Drill Mente-
+    // Acción visible on a Puntería target" reported directly with a
+    // screenshot — and `wrap.innerHTML` never rebuilt at all, so the whole
+    // camera scope (video/prompt/zoom/torch button, all its event
+    // listeners) stayed bound to the FIRST target ever sent, silently
+    // stale for the rest of the session. Guarded the same defensive way
+    // several other lines in this file already handle "element might not
+    // exist right now" (see stopCamera() below).
+    $('#dryEmpty') && ($('#dryEmpty').style.display = 'none');
     $('#drySide').style.display = 'flex';
     // Un blanco nuevo (o un cambio de familia) cierra cualquier drill/sesión
     // de puntería que hubiera quedado activa del blanco anterior.
@@ -684,6 +704,17 @@ const DryFire = (() => {
               ? `zoom: ÓPTICO/hardware ${zoomInfo.applied ? 'aplicado' : 'soportado pero no aplicado aún'} (rango real del teléfono: ${zoomInfo.range.min}×-${zoomInfo.range.max}×)`
               : 'zoom: DIGITAL (recorte) — este teléfono no expone zoom óptico controlable')
           : '';
+        // Build .23: agregado para poder confirmar DESDE EL CELULAR MISMO si
+        // el botón de flash falta porque el navegador/teléfono no expone el
+        // control (Vision.getTorchInfo().supported === false), en vez de
+        // tener que adivinarlo mirando un video. Si esta línea dice "NO
+        // soportada", el botón oculto es el comportamiento esperado, no un
+        // bug — mandame una captura de este panel si el botón sigue sin
+        // aparecer y acá dice "sí soportada".
+        const torchInfo = Vision.getTorchInfo ? Vision.getTorchInfo() : null;
+        const torchNote = torchInfo
+          ? `linterna (flash): ${torchInfo.supported ? `sí soportada por este navegador (${torchInfo.on ? 'ENCENDIDA' : 'apagada'})` : 'NO soportada por este navegador/teléfono — por eso no aparece el botón 🔦'}`
+          : '';
         // IMPORTANT: everything above is the raw, SINGLE-FRAME detector
         // reading — "DETECTARÍA UN DISPARO" only means this one frame's
         // blob passed the brightness/contraste/área thresholds. It does
@@ -700,6 +731,7 @@ const DryFire = (() => {
         renderDebugPanel(
           (expNote ? expNote + '\n' : '') +
           (zoomNote ? zoomNote + '\n' : '') +
+          (torchNote ? torchNote + '\n' : '') +
           `BLOQUEADO — láser ${d.colorId === 'green' ? 'verde' : 'rojo'} · apuntá y mirá estos valores en vivo:\n` +
           `  brillo máximo (escala de grises): ${d.maxBrightness.toFixed(0)} / necesita ≥${d.requiredBrightness}  ${passB ? '✓' : '✗'}\n` +
           `  contraste local (destello): ${d.maxLocalContrast.toFixed(0)} / necesita ≥${d.requiredLocalContrast}  ${passC ? '✓' : '✗'}\n` +
@@ -1148,11 +1180,29 @@ const DryFire = (() => {
     // tell "ready to start" apart from "still need to activate/calibrate
     // the camera first". Only treat one as the current action once it's
     // actually enabled; otherwise the real next step is still #btnLock.
+    //
+    // Build .23: this used to check `btn.style.display !== 'none'` — the
+    // button's OWN inline style. That's wrong for #btnStartDrill and
+    // #btnStartPunteria specifically: they're never hidden directly, their
+    // PARENT (#drySideReaction / #drySideIpsc) is, via ensureScope()'s
+    // `isIpsc` toggle. So on an IPSC/Puntería target, #btnStartDrill's own
+    // style.display was always '' (never 'none') even though it was
+    // invisible — this branch matched it first regardless of target
+    // family, so the floating bottom bar showed "Iniciar Drill Mente-
+    // Acción" (and clicking it actually started a Reacción drill via
+    // mirror.click()) on a Puntería target that was never showing that
+    // button at all. Reported directly, with a screenshot showing exactly
+    // this: the Puntería panel (zone stats, "Iniciar sesión de puntería")
+    // visible above, with "Iniciar Drill Mente-Acción" pinned at the
+    // bottom regardless. offsetParent is null when an element OR ANY
+    // ANCESTOR has display:none (same technique already used two lines up
+    // for #drySide itself), so it actually reflects whether the button is
+    // showing, not just its own style attribute.
     let mirror = null;
-    if (stopBtn && stopBtn.style.display !== 'none') mirror = stopBtn;
-    else if (stopPunteriaBtn && stopPunteriaBtn.style.display !== 'none') mirror = stopPunteriaBtn;
-    else if (startBtn && startBtn.style.display !== 'none' && !startBtn.disabled) mirror = startBtn;
-    else if (startPunteriaBtn && startPunteriaBtn.style.display !== 'none' && !startPunteriaBtn.disabled) mirror = startPunteriaBtn;
+    if (stopBtn && stopBtn.offsetParent !== null) mirror = stopBtn;
+    else if (stopPunteriaBtn && stopPunteriaBtn.offsetParent !== null) mirror = stopPunteriaBtn;
+    else if (startBtn && startBtn.offsetParent !== null && !startBtn.disabled) mirror = startBtn;
+    else if (startPunteriaBtn && startPunteriaBtn.offsetParent !== null && !startPunteriaBtn.disabled) mirror = startPunteriaBtn;
     else if (lockBtn) mirror = lockBtn;
     if (!mirror) { bar.style.display = 'none'; return; }
     // NOT '' — the bar's CSS default is display:none (see .cta-bar in

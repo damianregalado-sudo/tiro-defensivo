@@ -36,7 +36,14 @@ const LiveFire = (() => {
   function ensureScope() {
     target = App.currentTarget();
     if (!target) return;
-    $('#liveEmpty').style.display = 'none';
+    // Build .23: same bug as drill.js's ensureScope() (see its comment) —
+    // #liveEmpty only exists in index.html's static markup, gets wiped out
+    // by the first `wrap.innerHTML = ...` below, and querying it after that
+    // threw a TypeError that silently aborted the rest of this function on
+    // every SECOND (and later) target sent to Fuego Real in the same
+    // session — the family-dependent stat panels a few lines down, and the
+    // whole camera scope rebuild, never happened again after the first.
+    $('#liveEmpty') && ($('#liveEmpty').style.display = 'none');
     $('#liveSide').style.display = 'flex';
     shots = []; referenceGray = null; holeCandidate = null;
     zoneTally = target.family === 'ipsc' ? { A: 0, C: 0, D: 0, miss: 0 } : null;
