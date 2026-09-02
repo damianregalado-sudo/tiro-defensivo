@@ -237,28 +237,55 @@ const DryFire = (() => {
            design, so camera state is visible over the live feed) — without
            this the debug panel's first lines used to render right under
            those pills, unreadable behind the "Diagnóstico" button. Sized
-           for the worst case (state + pageSize + recognition pill + the
-           debug button itself, all 4 stacked — see .scope-hud
+           for the worst case (state + pageSize + recognition pill +
+           flash-toggle pill (build .21, only shown when the device supports
+           it) + the debug button itself, all 5 stacked — see .scope-hud
            flex-direction:column in css/style.css). -->
-      <pre class="mono" id="dryDebugPanel" style="display:none;margin:132px 0 10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;background:rgba(0,0,0,.25);border-radius:6px;padding:8px;"></pre>
-      <video id="dryVideo" autoplay playsinline muted style="display:none;"></video>
-      <div style="position:relative; display:none;" id="drySearchWrap">
-        <canvas id="drySearchPreview" class="overlay" style="position:static; cursor:default;"></canvas>
-        <canvas id="drySearchGuide" class="overlay" style="top:0; left:0;"></canvas>
-      </div>
-      <div style="position:relative; display:none;" id="dryLockedWrap">
-        <canvas id="dryOverlay" class="overlay"></canvas>
-      </div>
-      <div class="empty-hint" id="dryCamHint">
-        <span class="big">📷</span>
-        Activá la cámara y encuadrá el blanco impreso completo dentro del cuadro.
-      </div>
-      <div class="prompt-banner" id="dryPrompt" style="display:none;"></div>
-      <div class="zoom-ctrl" id="dryZoomCtrl" style="display:none;">
-        <button class="zoom-btn" id="dryZoomOut">－</button>
-        <input type="range" id="dryZoomSlider" min="1" max="4" step="0.25" value="1">
-        <button class="zoom-btn" id="dryZoomIn">＋</button>
-        <span class="zoom-val" id="dryZoomVal">1.0×</span>
+      <pre class="mono" id="dryDebugPanel" style="display:none;margin:158px 0 10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;background:rgba(0,0,0,.25);border-radius:6px;padding:8px;"></pre>
+      <!-- Build .22: dryVideo/searchWrap/lockedWrap/camHint/prompt/zoomCtrl
+           used to be direct children of .scope (position:relative), same as
+           #dryDebugPanel above. That meant #dryPrompt and #dryZoomCtrl
+           (both position:absolute, bottom:12px) were anchored to the
+           bottom of .scope's ENTIRE content box — which .scope (a flex ROW,
+           see css/style.css) stretches to fit its TALLEST child. With
+           Diagnóstico off that's just the video/canvas (~480px), so the
+           anchor sits right where you'd expect, just under the target
+           image. But turn Diagnóstico on and #dryDebugPanel — a long,
+           multi-line <pre> that grows with every extra diagnostic line —
+           becomes the tallest child instead, so .scope grows to match IT,
+           and #dryPrompt/#dryZoomCtrl end up anchored 100-200+ px below the
+           actual video box: still technically on the page, but nowhere
+           near the target the shooter is looking at (confirmed with a
+           headless repro: ~150px gap with a short sample debug block, and
+           it only grows with the real multi-line panel). Reported directly:
+           "no hace nada al disparar en el blanco" — the countdown, the
+           "¡YA!" go-signal and the ✔/✘ hit result were very likely still
+           firing exactly as coded, just invisible off in the diagnostic
+           text below, which is indistinguishable from "nothing happens" to
+           the person holding the laser. Wrapping just the video/canvas/
+           banner/zoom group in its OWN position:relative container gives
+           #dryPrompt/#dryZoomCtrl a containing block sized only by the
+           video content, independent of how tall the debug panel gets. -->
+      <div style="position:relative;" id="dryVideoWrap">
+        <video id="dryVideo" autoplay playsinline muted style="display:none;"></video>
+        <div style="position:relative; display:none;" id="drySearchWrap">
+          <canvas id="drySearchPreview" class="overlay" style="position:static; cursor:default;"></canvas>
+          <canvas id="drySearchGuide" class="overlay" style="top:0; left:0;"></canvas>
+        </div>
+        <div style="position:relative; display:none;" id="dryLockedWrap">
+          <canvas id="dryOverlay" class="overlay"></canvas>
+        </div>
+        <div class="empty-hint" id="dryCamHint">
+          <span class="big">📷</span>
+          Activá la cámara y encuadrá el blanco impreso completo dentro del cuadro.
+        </div>
+        <div class="prompt-banner" id="dryPrompt" style="display:none;"></div>
+        <div class="zoom-ctrl" id="dryZoomCtrl" style="display:none;">
+          <button class="zoom-btn" id="dryZoomOut">－</button>
+          <input type="range" id="dryZoomSlider" min="1" max="4" step="0.25" value="1">
+          <button class="zoom-btn" id="dryZoomIn">＋</button>
+          <span class="zoom-val" id="dryZoomVal">1.0×</span>
+        </div>
       </div>
     `;
     $('#btnLock').disabled = false;

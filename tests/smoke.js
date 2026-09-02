@@ -32,7 +32,15 @@
 // real en este entorno no se puede probar que efectivamente prenda la luz,
 // pero sí que el feature-detection no rompe nada cuando el dispositivo no
 // expone torch (el caso de este entorno) y que el botón queda oculto en vez
-// de mostrarse roto/sin hacer nada.
+// de mostrarse roto/sin hacer nada. New in .22: bug real reportado con video
+// ("no hace nada al disparar en el blanco") — #dryPrompt/#dryZoomCtrl
+// (position:absolute, bottom:12px) vivían directo dentro de .scope junto a
+// #dryDebugPanel; como .scope es un flex-row que se estira a su hijo más
+// alto, prender el panel de Diagnóstico (un <pre> que crece con cada línea)
+// empujaba el cartel de consigna/resultado muy por debajo del video, fuera
+// de la vista — reproducido acá sin cámara real (se puede: es puro CSS/DOM,
+// no depende de láser) comparando la posición de #dryPrompt relativa al
+// cuadro de video con Diagnóstico apagado vs. prendido con mucho texto.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -55,7 +63,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .21', bodyText.includes('build 2026-08-28.21'));
+  check('badge de build dice .22', bodyText.includes('build 2026-08-28.22'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -204,6 +212,56 @@ const { chromium } = require('playwright');
   check('Vision.getTorchInfo() sin cámara activa da supported:false', torchInfoInitial.supported === false);
   const torchSetResult = await page.evaluate(() => Vision.setTorch(true));
   check('Vision.setTorch() sin cámara activa no tira excepción y devuelve false', torchSetResult === false);
+
+  // ---- Regresión build .22: el panel de Diagnóstico no debe empujar el
+  // cartel de consigna/resultado (#dryPrompt) ni el control de zoom
+  // (#dryZoomCtrl) lejos del video --------------------------------------
+  // Bug real reportado con video: "no hace nada al disparar en el blanco".
+  // #dryPrompt/#dryZoomCtrl son position:absolute con bottom:12px — antes de
+  // este build, ese "bottom" era relativo a TODO .scope (que es un flex-row
+  // y se estira a su hijo más alto), así que prender Diagnóstico (un <pre>
+  // que crece con cada línea de diagnóstico) estiraba .scope y arrastraba el
+  // cartel muy por debajo del video, invisible. Se simula el estado
+  // "bloqueado" sin cámara real (es puro DOM/CSS, no depende de láser):
+  // se arma el mismo canvas base que onVisionFrame() usa de verdad
+  // (Vision.warpCanvas, del tamaño real de Vision.WARP_W/H) dentro de
+  // #dryLockedWrap, y se compara la posición de #dryPrompt relativa al
+  // cuadro de video con Diagnóstico apagado vs. prendido con texto largo —
+  // debe ser la MISMA en los dos casos.
+  await page.evaluate(() => {
+    const lockedWrap = document.getElementById('dryLockedWrap');
+    const camHint = document.getElementById('dryCamHint');
+    const overlay = document.getElementById('dryOverlay');
+    const base = Vision.warpCanvas || document.createElement('canvas');
+    base.width = Vision.WARP_W; base.height = Vision.WARP_H;
+    base.className = '';
+    lockedWrap.prepend(base);
+    overlay.width = Vision.WARP_W; overlay.height = Vision.WARP_H;
+    lockedWrap.style.display = 'block';
+    camHint.style.display = 'none';
+    const prompt = document.getElementById('dryPrompt');
+    prompt.style.display = '';
+    prompt.innerHTML = 'PRUEBA';
+  });
+  const gapWithDebugOff = await page.evaluate(() => {
+    const prompt = document.getElementById('dryPrompt').getBoundingClientRect();
+    const locked = document.getElementById('dryLockedWrap').getBoundingClientRect();
+    return prompt.top - locked.bottom;
+  });
+  const gapWithDebugOn = await page.evaluate(() => {
+    const panel = document.getElementById('dryDebugPanel');
+    panel.style.display = '';
+    panel.textContent = Array.from({ length: 20 }, (_, i) => `línea de diagnóstico de prueba número ${i}`).join('\n');
+    const prompt = document.getElementById('dryPrompt').getBoundingClientRect();
+    const locked = document.getElementById('dryLockedWrap').getBoundingClientRect();
+    panel.style.display = 'none';
+    panel.textContent = '';
+    return prompt.top - locked.bottom;
+  });
+  check(
+    'prender Diagnóstico no mueve el cartel de consigna/resultado lejos del video',
+    Math.abs(gapWithDebugOn - gapWithDebugOff) < 1
+  );
 
   // ---- Regresión build .20: arrancar Puntería no debe dejar visible el
   // cartel "Drill completo" de una sesión de Reacción anterior ------------
