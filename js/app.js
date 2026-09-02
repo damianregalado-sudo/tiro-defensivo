@@ -494,10 +494,53 @@ const App = (() => {
     DryFire.setupCtaBar();
     tryImportFromHash();
 
+    // Build .19 — aviso de "hay una versión nueva" en vez de depender de que
+    // el usuario cierre y reabra la app a mano.
+    //
+    // El problema real (encontrado con el bug del QR que no aparecía): un
+    // service worker nuevo puede terminar instalado y ACTIVO de fondo sin
+    // que la pestaña ya abierta se entere — self.skipWaiting()+clients.claim()
+    // (ver sw.js) hacen que tome el control igual, pero los módulos JS que
+    // esa pestaña YA cargó (app.js, target.js, etc.) siguen siendo los
+    // viejos: solo un fetch/recarga nuevo pasa por el service worker nuevo.
+    // Con una PWA que la gente deja abierta días sin cerrarla — que es
+    // justamente el caso de uso real, ya repartida a clientes — eso podía
+    // dejar a alguien atascado en una versión vieja indefinidamente sin
+    // ningún aviso.
+    //
+    // `controllerchange` se dispara justo cuando el service worker nuevo
+    // toma el control (gracias a clients.claim()) — es la señal de "ya hay
+    // una versión nueva lista". En vez de recargar solo (podría cortar a
+    // alguien a mitad de un dry-fire), mostramos un cartel y dejamos que el
+    // usuario elija el momento.
+    //
+    // OJO: este evento también se dispara la PRIMERÍSIMA vez que se instala
+    // el service worker (cuando alguien entra por primera vez y todavía no
+    // había ningún controller) — clients.claim() reclama esa misma pestaña
+    // igual, aunque no haya nada "nuevo" que anunciar. Sin este chequeo, un
+    // usuario nuevo vería el cartel de "actualización disponible" en su
+    // primerísima visita, lo cual no tiene sentido. `hadControllerAtStart`
+    // distingue ambos casos: si ya había un controller cuando arrancó esta
+    // carga de página, cualquier cambio posterior es una actualización real;
+    // si no había ninguno, el PRIMER cambio es la instalación inicial (se
+    // ignora) y cualquier cambio posterior a ese sí es una actualización real.
     if ('serviceWorker' in navigator) {
+      const hadControllerAtStart = !!navigator.serviceWorker.controller;
+      let firstChangeSeen = false;
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       });
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadControllerAtStart && !firstChangeSeen) {
+          firstChangeSeen = true;
+          return;
+        }
+        firstChangeSeen = true;
+        const banner = $('#updateBanner');
+        if (banner) banner.hidden = false;
+      });
+      const btnReload = $('#btnReloadUpdate');
+      if (btnReload) btnReload.addEventListener('click', () => location.reload());
     }
   }
 

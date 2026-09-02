@@ -15,6 +15,19 @@
 
 <div class="screen-flash" id="screenFlash"></div>
 
+<!-- Build .19 — aviso de actualización disponible. Ver la nota larga en
+     js/app.js (registro del service worker) para por qué hace falta esto:
+     un service worker nuevo puede quedar instalado y activo de fondo sin que
+     la pestaña/app ya abierta se entere — sus pedidos de red siguen yendo
+     por la copia VIEJA hasta que hay una recarga. Este cartel es ese aviso:
+     aparece solo cuando el navegador confirma que ya hay una versión nueva
+     lista, y "Actualizar ahora" fuerza la recarga en el momento que el
+     usuario elija (no de golpe, para no cortarlo a mitad de un dry-fire). -->
+<div id="updateBanner" class="update-banner" hidden>
+  <span>Hay una actualización de la app lista para instalar.</span>
+  <button type="button" class="btn btn-ghost" id="btnReloadUpdate">Actualizar ahora</button>
+</div>
+
 <div class="shell">
 
   <div class="topbar">
@@ -26,7 +39,7 @@
       </div>
     </div>
     <div class="system-status">
-      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.18</span>
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.19</span>
       <span class="dot" id="statusDot"></span>
       <span id="statusText">ESTADO DE SEGURIDAD: BLOQUEADO</span>
     </div>
@@ -454,7 +467,7 @@
   </div>
 
   <div class="footer-note">
-    <span class="pill">build 2026-08-28.18</span>
+    <span class="pill">build 2026-08-28.19</span>
   </div>
 </div>
 

@@ -1,4 +1,4 @@
-// Smoke test for build 2026-08-28.18 — verifies (without camera/laser, which
+// Smoke test for build 2026-08-28.19 — verifies (without camera/laser, which
 // can't be simulated headlessly): no console errors on load, the two hidden
 // debug/JSON panels and the "Sobre esta app" technical footer are gone from
 // the visible page, the build badge is correct, the new flashScreen()
@@ -17,7 +17,10 @@
 // encode/decode del código "compartir blanco" (round-trip completo,
 // reacción y puntería, código roto → null) y que abrir la app con #t=...
 // importa y guarda ese blanco — NO se puede probar el dibujo del QR en sí
-// (la librería se carga de una CDN bloqueada acá, igual que jsPDF).
+// (la librería se carga de una CDN bloqueada acá, igual que jsPDF). New in
+// .19: el cartel de "actualización disponible" no aparece en la instalación
+// inicial, sí aparece ante un controllerchange posterior, y el botón
+// "Actualizar ahora" efectivamente recarga la página.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -40,7 +43,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .18', bodyText.includes('build 2026-08-28.18'));
+  check('badge de build dice .19', bodyText.includes('build 2026-08-28.19'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -245,6 +248,29 @@ const { chromium } = require('playwright');
   check('importar por enlace no tira errores de consola', importErrors.length === 0);
   if (importErrors.length) console.log('  errores import:', importErrors.slice(0, 5));
   await importPage.close();
+
+  // ---- Aviso de "actualización disponible" (nuevo en build .19) ---------
+  // Motivado por el bug real del QR: un service worker nuevo puede terminar
+  // activo de fondo sin que la pestaña ya abierta se entere, dejando a
+  // alguien atascado en JS viejo indefinidamente. El fix es un cartel que
+  // aparece cuando el navegador confirma el cambio de controller — pero
+  // NO en la instalación inicial (eso asustaría a un usuario nuevo en su
+  // primerísima visita). `controllerchange` es un evento normal de
+  // EventTarget, así que se puede disparar a mano con dispatchEvent() para
+  // probar la lógica sin depender de un segundo deploy real.
+  const bannerHiddenAfterFirstLoad = await page.evaluate(() => document.getElementById('updateBanner').hidden);
+  check('el cartel de actualización no aparece en la instalación inicial', bannerHiddenAfterFirstLoad);
+
+  await page.evaluate(() => navigator.serviceWorker.dispatchEvent(new Event('controllerchange')));
+  await page.waitForTimeout(50);
+  const bannerShownAfterUpdate = await page.evaluate(() => document.getElementById('updateBanner').hidden === false);
+  check('un controllerchange posterior (actualización real) sí muestra el cartel', bannerShownAfterUpdate);
+
+  const [reloadHappened] = await Promise.all([
+    page.waitForEvent('load', { timeout: 3000 }).then(() => true).catch(() => false),
+    page.click('#btnReloadUpdate'),
+  ]);
+  check('tocar "Actualizar ahora" recarga la página', reloadHappened);
 
   console.log(`\n${pass} pasaron, ${fail} fallaron`);
   await browser.close();

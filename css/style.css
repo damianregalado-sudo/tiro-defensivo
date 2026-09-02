@@ -253,6 +253,22 @@ tr:last-child td{border-bottom:none;}
 }
 .screen-flash.is-on{ transition:opacity 40ms ease-in; }
 
+/* Aviso de actualización disponible (build .19) — fijo arriba (no abajo,
+   donde vive .cta-bar durante un drill) para que nunca tape los controles de
+   disparo/bloqueo. z-index por encima del resto de la UI pero no forma parte
+   del flujo normal: solo aparece cuando el service worker confirma una
+   versión nueva activa. Ver js/app.js. */
+.update-banner{
+  position:fixed; top:0; left:0; right:0; z-index:60;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  flex-wrap:wrap;
+  padding:8px 16px calc(8px + env(safe-area-inset-top, 0px));
+  background:var(--accent-dim); color:#fff;
+  font-size:13px; text-align:center;
+}
+.update-banner[hidden]{ display:none; }
+.update-banner .btn{ padding:4px 12px; font-size:12px; }
+
 .cta-bar{
   position:fixed; left:0; right:0; bottom:0; z-index:40; display:none;
   padding:10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
