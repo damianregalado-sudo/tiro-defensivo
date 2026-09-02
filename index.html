@@ -39,7 +39,7 @@
       </div>
     </div>
     <div class="system-status">
-      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.24</span>
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-08-28.25</span>
       <span class="dot" id="statusDot"></span>
       <span id="statusText">ESTADO DE SEGURIDAD: BLOQUEADO</span>
     </div>
@@ -56,8 +56,8 @@
   <!-- ========================= PANEL 1: SAFETY ========================= -->
   <div class="panel active" id="panel-safety">
     <div class="card">
-      <h2>Control de seguridad &mdash; antes de empezar</h2>
-      <p class="sub">El chequeo de seguridad depende de qué vas a practicar: no tiene sentido "certificar" que no hay munición real si vas a tirar con munición real. Elegí primero, y el sistema permanece en <code class="inline">EstadoSeguridad.BLOQUEADO</code> hasta completar los 4 pasos correspondientes, en orden, cada uno con un gesto de deslizar.</p>
+      <h2>¿Qué vas a practicar hoy?</h2>
+      <p class="sub">Elegí primero qué vas a practicar. Después vas a elegir el blanco (generar uno nuevo o usar uno guardado) y recién al final, justo antes de la cámara, el chequeo de seguridad correspondiente — no tiene sentido "certificar" que no hay munición real si vas a tirar con munición real, así que ese chequeo siempre depende de lo que elijas acá. El sistema permanece en <code class="inline">EstadoSeguridad.BLOQUEADO</code> hasta completar los 4 pasos correspondientes, en orden, cada uno con un gesto de deslizar.</p>
 
       <div id="safetyModePicker">
         <div class="mode-options">
@@ -74,9 +74,51 @@
         </div>
       </div>
 
+      <!-- Build .25 — segundo paso del flujo de inicio: pedido directo
+           ("una vez que ingresa preguntar generar blanco o usar los
+           guardados"). Antes, elegir el modo acá mostraba el checklist de
+           seguridad al toque; ahora primero se elige QUÉ blanco se va a usar,
+           y el checklist queda para el final, justo antes de entrar a
+           practicar — así el orden completo es: qué practicar → qué blanco →
+           chequeo de seguridad → práctica. -->
+      <div id="safetyTargetPicker" style="display:none;">
+        <div class="btn-row" style="margin-bottom:14px;">
+          <span class="pill accent" id="pickerModeLabel"></span>
+          <button class="btn btn-ghost" id="btnChangeModeFromPicker" style="margin-left:auto;">Cambiar</button>
+        </div>
+        <h3 style="margin:0 0 4px;">¿Qué blanco vas a usar?</h3>
+        <p class="sub">El chequeo de seguridad queda para el final, justo antes de la cámara — primero resolvemos qué vas a tirar.</p>
+        <div class="mode-options">
+          <button class="mode-option" id="pickGenerateBtn" type="button">
+            <span class="mode-icon">➕</span>
+            <span class="mode-title">Generar blanco nuevo</span>
+            <span class="mode-desc">Armá uno desde cero: papel, distancia, tipo de figuras.</span>
+          </button>
+          <button class="mode-option" id="pickSavedBtn" type="button">
+            <span class="mode-icon">📂</span>
+            <span class="mode-title">Usar un blanco guardado</span>
+            <span class="mode-desc">Elegí uno de tu biblioteca — útil si ya tenés la hoja impresa de antes.</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="safetyLibraryPicker" style="display:none;">
+        <div class="btn-row" style="margin-bottom:14px;">
+          <span class="pill accent" id="libraryPickerModeLabel"></span>
+          <button class="btn btn-ghost" id="btnBackToTargetPicker" style="margin-left:auto;">Volver</button>
+        </div>
+        <h3 style="margin:0 0 4px;">Elegí un blanco guardado</h3>
+        <p class="sub">Tocá una miniatura para mandarlo directo a practicar.</p>
+        <div class="field">
+          <input type="text" id="homeSavedSearch" placeholder="Buscar por nombre o ID…">
+        </div>
+        <div class="saved-target-grid" id="homeSavedGrid"></div>
+      </div>
+
       <div id="safetyChecklistWrap" style="display:none;">
         <div class="btn-row" style="margin-bottom:14px;">
           <span class="pill accent" id="safetyModeLabel"></span>
+          <span class="pill" id="safetyTargetLabel" style="display:none;"></span>
           <button class="btn btn-ghost" id="btnChangeMode" style="margin-left:auto;">Cambiar</button>
         </div>
 
@@ -467,7 +509,7 @@
   </div>
 
   <div class="footer-note">
-    <span class="pill">build 2026-08-28.24</span>
+    <span class="pill">build 2026-08-28.25</span>
   </div>
 </div>
 

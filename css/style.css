@@ -132,6 +132,30 @@ select.pill{max-width:150px; text-overflow:ellipsis; cursor:pointer;}
 .mode-title{font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16.5px; color:var(--text);}
 .mode-desc{font-size:12.5px; color:var(--text-dim); line-height:1.5;}
 
+/* Build .25 — grilla de miniaturas de blancos guardados, usada en el paso
+   "Usar un blanco guardado" del flujo de inicio (ver #safetyLibraryPicker
+   en index.html). Pedido directo: "aparecen miniaturas de los blancos
+   guardados y al hacer click lo manda para practicar". Cada tarjeta es un
+   <button> real (no un <div> con onclick) para que quede accesible por
+   teclado igual que el resto de los controles de la app. El canvas adentro
+   se dibuja con Target.drawPrintPreview() a tamaño completo (~340px) y se
+   achica solo por CSS — reutiliza el mismo dibujo real de la vista previa
+   de impresión en vez de tener una segunda función de dibujo simplificada
+   que podría desincronizarse del blanco real. */
+.saved-target-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:10px; margin-top:4px;}
+.saved-target-card{
+  display:flex; flex-direction:column; align-items:stretch; gap:6px; text-align:left;
+  background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:8px;
+  cursor:pointer; transition:border-color .15s, background .15s; font-family:inherit;
+}
+.saved-target-card:hover{border-color:var(--accent-dim); background:var(--surface-3);}
+.saved-target-card .stc-thumb-wrap{
+  display:block; border-radius:6px; overflow:hidden; background:var(--paper); border:1px solid var(--border-soft);
+}
+.saved-target-card .stc-thumb-wrap canvas{display:block; width:100%; height:auto;}
+.saved-target-card .stc-name{font-family:'Rajdhani',sans-serif; font-weight:700; font-size:13px; color:var(--text); line-height:1.3;}
+.saved-target-card .stc-meta{font-size:10.5px; color:var(--text-dim);}
+
 .safety-progress{display:flex; align-items:center; gap:8px; margin-bottom:14px; font-family:'Rajdhani',sans-serif; font-weight:600; font-size:13px; color:var(--text-dim); letter-spacing:.3px;}
 .safety-progress .dots{display:flex; gap:6px;}
 .safety-progress .dot{width:9px; height:9px; border-radius:50%; background:var(--surface-3); border:1px solid var(--border); flex:none;}

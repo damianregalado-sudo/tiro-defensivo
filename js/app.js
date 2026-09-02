@@ -17,10 +17,65 @@ const App = (() => {
     $$('.tab-btn').forEach(b => { if (b.dataset.tab !== 'safety') { b.disabled = false; b.classList.remove('locked'); } });
   }
 
+  // Build .25 — pedido directo: "una vez que ingresa preguntar generar
+  // blanco o usar los guardados... y recién ahí hace la check list de
+  // seguridad, ya sea la de en seco o en vivo". El chequeo de seguridad
+  // ahora se muestra DESPUÉS de elegir el blanco (no antes), así que hace
+  // falta recordar a dónde ir una vez armado: `pendingPractice` guarda el
+  // destino (pestaña + qué función arranca la cámara) que quedó pendiente
+  // mientras se completa el checklist.
+  let pendingPractice = null;
+
+  // Una vez armado por lo menos una vez en esta sesión, todas las pestañas
+  // quedan desbloqueadas para siempre (comportamiento ya existente desde
+  // antes de esta build) — se usa ese mismo estado como señal de "ya se
+  // hizo el chequeo alguna vez esta sesión" para no repetirlo cada vez que
+  // se manda un blanco nuevo a practicar, ni romper el atajo que ya existía
+  // (mandar un segundo/tercer blanco en la misma sesión sin repetir el
+  // checklist — ver tests/smoke.js).
+  function tabsAlreadyUnlocked() {
+    const t = $('.tab-btn[data-tab="target"]');
+    return !!t && !t.disabled;
+  }
+
+  // Punto único por el que se manda un blanco a practicar, ya sea desde
+  // "Enviar a Fuego Seco/Real" en el Generador, o desde tocar una miniatura
+  // en "Usar un blanco guardado". Si ya se hizo el chequeo de seguridad
+  // esta sesión, va directo a la cámara (atajo ya existente); si no, guarda
+  // el destino y muestra el checklist correspondiente primero.
+  function sendToPractice(modeKey, targetLabel) {
+    autoSaveTarget();
+    const tabName = modeKey === 'LIVE' ? 'live' : 'dry';
+    const ensureFn = modeKey === 'LIVE' ? LiveFire.ensureScope : DryFire.ensureScope;
+    if (tabsAlreadyUnlocked()) {
+      setTab(tabName);
+      ensureFn();
+      return;
+    }
+    pendingPractice = { tabName, ensureFn };
+    setTab('safety');
+    Safety.showChecklistForMode(modeKey, targetLabel);
+  }
+
+  function buildTargetLabel() {
+    if (!target) return '';
+    const spec = PAGE_SPECS[target.pageSize];
+    return `${spec.label} · ${target.family === 'ipsc' ? 'Puntería' : 'Reacción'} #${target.id}`;
+  }
+
   function onArmed(mode) {
     $('#statusDot').classList.add('on');
     $('#statusText').textContent = 'ESTADO DE SEGURIDAD: ARMADO — CÁMARA HABILITADA';
     unlockTabs();
+    if (pendingPractice) {
+      const { tabName, ensureFn } = pendingPractice;
+      pendingPractice = null;
+      setTab(tabName);
+      ensureFn();
+      return;
+    }
+    // Sin destino pendiente (por ejemplo, se llegó al checklist por algún
+    // otro camino): mismo comportamiento de siempre, ir al Generador.
     if (mode) {
       $('#pageMode').value = mode;
       $('#pageMode').dispatchEvent(new Event('change'));
@@ -254,6 +309,54 @@ const App = (() => {
     $$('#savedTargetsBody [data-del]').forEach(b => b.addEventListener('click', () => deleteSavedTarget(b.dataset.del)));
   }
 
+  // Build .25 — grilla de miniaturas para el paso "Usar un blanco guardado"
+  // del flujo de inicio (ver #safetyLibraryPicker en index.html). Pedido
+  // directo: "aparecen miniaturas de los blancos guardados y al hacer click
+  // lo manda para practicar". Cada miniatura se dibuja con
+  // Target.drawPrintPreview() — el mismo dibujo real que usa la vista previa
+  // de impresión — así nunca puede desincronizarse de cómo se ve el blanco
+  // de verdad; el achique a tamaño de miniatura es sólo CSS (ver
+  // .saved-target-card en style.css).
+  function renderHomeSavedGrid() {
+    const grid = $('#homeSavedGrid');
+    if (!grid) return;
+    let list = Storage.get('tm_saved_targets', []);
+    const q = ($('#homeSavedSearch') && $('#homeSavedSearch').value || '').trim().toLowerCase();
+    if (q) {
+      list = list.filter(r => String(r.target.id).includes(q) || r.name.toLowerCase().includes(q));
+    }
+    if (!list.length) {
+      grid.innerHTML = `<p class="sub">${q
+        ? 'Ningún blanco guardado coincide con la búsqueda.'
+        : 'Todavía no guardaste ningún blanco. Volvé y elegí "Generar blanco nuevo" — se guarda solo, listo para usar la próxima vez.'}</p>`;
+      return;
+    }
+    grid.innerHTML = list.map(r => `
+      <button class="saved-target-card" type="button" data-load-home="${r.id}">
+        <span class="stc-thumb-wrap"><canvas data-thumb-id="${r.id}"></canvas></span>
+        <span class="stc-name">${escapeHtml(r.name)}${r.target.family === 'ipsc' ? ' <span class="pill" style="padding:1px 6px;font-size:10px;">IPSC</span>' : ''}</span>
+        <span class="stc-meta">${PAGE_SPECS[r.target.pageSize].label} · ${r.target.mode === 'LIVE' ? 'Real' : 'Seco'} · ${fmtDate(new Date(r.createdAt).toISOString())}</span>
+      </button>
+    `).join('');
+    list.forEach(r => {
+      const cv = grid.querySelector(`canvas[data-thumb-id="${r.id}"]`);
+      if (cv) Target.drawPrintPreview(cv, r.target);
+    });
+    $$('#homeSavedGrid [data-load-home]').forEach(b => b.addEventListener('click', () => chooseLibraryTarget(b.dataset.loadHome)));
+  }
+
+  // Tocar una miniatura: carga ese blanco como activo Y lo manda derecho a
+  // practicar (mismo camino que "Enviar a Fuego Seco/Real"), en vez de
+  // requerir un segundo toque — pedido directo: "al hacer click lo manda
+  // para practicar".
+  function chooseLibraryTarget(id) {
+    const rec = Storage.get('tm_saved_targets', []).find(r => r.id === id);
+    if (!rec) return;
+    setActiveTarget(JSON.parse(JSON.stringify(rec.target)));
+    const modeKey = Safety.getMode() || target.mode;
+    sendToPractice(modeKey, buildTargetLabel());
+  }
+
   // ---- library backup (export/import as a .json file) ----------------
   // localStorage lives inside ONE browser on ONE device/profile — it is NOT
   // touched by app updates (a redeployed PWA keeps it), but it IS lost if
@@ -414,8 +517,26 @@ const App = (() => {
       e.target.value = '';
     });
 
-    $('#btnSendDry').addEventListener('click', () => { autoSaveTarget(); setTab('dry'); DryFire.ensureScope(); });
-    $('#btnSendLive').addEventListener('click', () => { autoSaveTarget(); setTab('live'); LiveFire.ensureScope(); });
+    $('#btnSendDry').addEventListener('click', () => sendToPractice('DRY', buildTargetLabel()));
+    $('#btnSendLive').addEventListener('click', () => sendToPractice('LIVE', buildTargetLabel()));
+
+    // Build .25 — paso 2 del flujo de inicio ("¿generás uno nuevo o usás
+    // uno guardado?" — ver #safetyTargetPicker/#safetyLibraryPicker en
+    // index.html). "Generar nuevo" lleva directo al Generador (con el modo
+    // ya preseleccionado, elegido en el paso 1) sin pasar todavía por el
+    // checklist — el checklist se muestra recién al tocar "Enviar a Fuego
+    // Seco/Real" desde ahí (sendToPractice, arriba). "Usar guardado"
+    // muestra la grilla de miniaturas en el mismo panel.
+    $('#pickGenerateBtn').addEventListener('click', () => {
+      const m = Safety.getMode();
+      if (m) { $('#pageMode').value = m; $('#pageMode').dispatchEvent(new Event('change')); }
+      setTab('target');
+    });
+    $('#pickSavedBtn').addEventListener('click', () => {
+      Safety.showLibraryPicker();
+      renderHomeSavedGrid();
+    });
+    if ($('#homeSavedSearch')) $('#homeSavedSearch').addEventListener('input', renderHomeSavedGrid);
 
     $('#btnLock').addEventListener('click', () => {
       if ($('#btnLock').textContent.includes('Activar')) DryFire.toggleCamera();

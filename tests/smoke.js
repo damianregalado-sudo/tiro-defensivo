@@ -74,6 +74,25 @@
 // da un resultado distinto para el mismo punto según el factor de escala
 // (si no, el hit-test seguiría evaluando contra la silueta de tamaño
 // completo aunque el papel impreso sea más chico).
+// New in .25: pedido directo — reordenar el flujo de inicio para que sea
+// "qué vas a practicar hoy → generar blanco o usar guardado → recién ahí
+// el checklist de seguridad" en vez de checklist primero. safety.js ya no
+// muestra el checklist al elegir el modo (selectMode); ahora pasa a un
+// paso nuevo (#safetyTargetPicker) con "Generar blanco nuevo" / "Usar un
+// blanco guardado" — este último abre una grilla de miniaturas REALES
+// (dibujadas con Target.drawPrintPreview(), no íconos genéricos) de los
+// blancos guardados; tocar una manda directo a practicar. El checklist
+// (Safety.showChecklistForMode(), llamado desde App.sendToPractice()) se
+// muestra recién ahí, justo antes de la cámara, y el atajo que ya existía
+// (no repetir el checklist si esta sesión ya se armó una vez) se preserva
+// tal cual estaba. Se prueba con una pestaña nueva (necesita una sesión sin
+// armar todavía, algo que la pestaña compartida de este archivo ya no
+// tiene para este punto): el orden real de las pantallas, que "Enviar a
+// Fuego Seco" antes de armar manda al checklist en vez de directo a la
+// cámara, que terminar el checklist aterriza en Fuego Seco con el blanco
+// correcto ya cargado, que las miniaturas de la biblioteca son dibujos
+// reales (canvas no vacío) y no un ícono, y que — ya armada la sesión —
+// tocar un blanco guardado nuevo no vuelve a pedir el checklist.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -96,7 +115,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .24', bodyText.includes('build 2026-08-28.24'));
+  check('badge de build dice .25', bodyText.includes('build 2026-08-28.25'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -567,6 +586,106 @@ const { chromium } = require('playwright');
     return decoded && decoded.family === 'ipsc' && decoded.id === original.id && decoded.mode === 'LIVE';
   });
   check('un blanco de puntería (IPSC) también viaja intacto en el código (sin figuras)', ipscShareRoundTrip);
+
+  // ---- Nuevo flujo de inicio (build .25) ---------------------------------
+  // Pedido directo: "quiero que al ingresar, la primera pregunta sea que
+  // vas a practicar hoy... una vez que ingresa preguntar generar blanco o
+  // usar los guardados... y recién ahí hace la check list de seguridad".
+  // Necesita una pestaña NUEVA (no la compartida `page`, que ya viene con
+  // las pestañas forzadas a habilitadas más arriba en este archivo) para
+  // poder probar el estado real de una sesión recién abierta, sin armar
+  // todavía — que es exactamente el caso que cambia con esta build.
+  const wizardPage = await browser.newPage();
+  const wizardErrors = [];
+  wizardPage.on('console', (msg) => { if (msg.type() === 'error') wizardErrors.push(msg.text()); });
+  wizardPage.on('pageerror', (err) => wizardErrors.push('pageerror: ' + err.message));
+  await wizardPage.goto('http://localhost:8934/index.html', { waitUntil: 'load' });
+  await wizardPage.waitForTimeout(800);
+
+  const initialStep = await wizardPage.evaluate(() => ({
+    modePicker: getComputedStyle(document.getElementById('safetyModePicker')).display !== 'none',
+    targetPicker: getComputedStyle(document.getElementById('safetyTargetPicker')).display !== 'none',
+    checklist: getComputedStyle(document.getElementById('safetyChecklistWrap')).display !== 'none',
+  }));
+  check('al entrar a la app, lo primero que se ve es "¿qué vas a practicar hoy?"', initialStep.modePicker && !initialStep.targetPicker && !initialStep.checklist);
+
+  await wizardPage.click('#modeDryBtn');
+  await wizardPage.waitForTimeout(80);
+  const afterMode = await wizardPage.evaluate(() => ({
+    modePicker: getComputedStyle(document.getElementById('safetyModePicker')).display !== 'none',
+    targetPicker: getComputedStyle(document.getElementById('safetyTargetPicker')).display !== 'none',
+  }));
+  check('elegir un modo pasa al paso "¿generar o usar guardado?" (no directo al checklist)', !afterMode.modePicker && afterMode.targetPicker);
+
+  await wizardPage.click('#pickGenerateBtn');
+  await wizardPage.waitForTimeout(80);
+  const afterGenerateBtn = await wizardPage.evaluate(() => ({
+    panel: document.querySelector('.panel.active').id,
+    pageMode: document.getElementById('pageMode').value,
+  }));
+  check('"Generar blanco nuevo" lleva al Generador con el modo ya preseleccionado', afterGenerateBtn.panel === 'panel-target' && afterGenerateBtn.pageMode === 'DRY');
+
+  await wizardPage.click('.family-btn[data-family="ipsc"]');
+  await wizardPage.waitForTimeout(50);
+  await wizardPage.click('#btnGenerate');
+  await wizardPage.waitForTimeout(80);
+  await wizardPage.click('#btnSendDry');
+  await wizardPage.waitForTimeout(150);
+  const afterSend = await wizardPage.evaluate(() => ({
+    panel: document.querySelector('.panel.active').id,
+    checklistVisible: getComputedStyle(document.getElementById('safetyChecklistWrap')).display !== 'none',
+    targetPill: document.getElementById('safetyTargetLabel').textContent,
+    dryTabStillLocked: document.querySelector('.tab-btn[data-tab="dry"]').disabled,
+  }));
+  check('"Enviar a Fuego Seco" en una sesión sin armar todavía manda al checklist, no directo a la cámara', afterSend.panel === 'panel-safety' && afterSend.checklistVisible && afterSend.dryTabStillLocked);
+  check('el checklist muestra qué blanco está en cola', afterSend.targetPill.includes('Puntería'));
+
+  for (let i = 0; i < 4; i++) {
+    await wizardPage.dblclick(`#safetyStepsDry .slider-track[data-idx="${i}"]`);
+    await wizardPage.waitForTimeout(40);
+  }
+  await wizardPage.click('#btnArm');
+  await wizardPage.waitForTimeout(250);
+  const afterArm = await wizardPage.evaluate(() => ({
+    panel: document.querySelector('.panel.active').id,
+    dryTabUnlocked: !document.querySelector('.tab-btn[data-tab="dry"]').disabled,
+    hasLockBtn: !!document.getElementById('btnLock'),
+  }));
+  check('completar el checklist manda directo a Fuego Seco con el blanco ya cargado', afterArm.panel === 'panel-dry' && afterArm.dryTabUnlocked && afterArm.hasLockBtn);
+
+  // "Usar un blanco guardado": la grilla tiene que mostrar una miniatura
+  // REAL de cada blanco (no un ícono genérico) — pedido directo: "aparecen
+  // miniaturas de los blancos guardados y al hacer click lo manda para
+  // practicar". Ya estamos armados (DRY) desde el paso anterior, así que
+  // esto también confirma que mandar un blanco guardado nuevo a Fuego Seco
+  // no repite el checklist (mismo atajo que ya existía para blancos
+  // generados a mano).
+  await wizardPage.evaluate(() => App.setTab('safety'));
+  await wizardPage.click('#btnChangeMode'); // volver del checklist al paso 1 para elegir modo de nuevo
+  await wizardPage.waitForTimeout(50);
+  await wizardPage.click('#modeDryBtn');
+  await wizardPage.waitForTimeout(80);
+  await wizardPage.click('#pickSavedBtn');
+  await wizardPage.waitForTimeout(200);
+  const gridCheck = await wizardPage.evaluate(() => {
+    const cv = document.querySelector('#homeSavedGrid canvas');
+    if (!cv) return { hasCanvas: false, nonEmpty: false };
+    const ctx = cv.getContext('2d');
+    const data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    let nonEmpty = false;
+    for (let i = 3; i < data.length; i += 4) { if (data[i] !== 0) { nonEmpty = true; break; } }
+    return { hasCanvas: true, nonEmpty };
+  });
+  check('la grilla de "usar guardado" dibuja una miniatura real (no un canvas vacío)', gridCheck.hasCanvas && gridCheck.nonEmpty);
+
+  await wizardPage.click('.saved-target-card');
+  await wizardPage.waitForTimeout(200);
+  const afterCardClick = await wizardPage.evaluate(() => document.querySelector('.panel.active').id);
+  check('tocar una miniatura ya armada esta sesión manda directo a practicar (sin repetir el checklist)', afterCardClick === 'panel-dry');
+
+  check('el flujo de inicio completo no tira errores de consola', wizardErrors.length === 0);
+  if (wizardErrors.length) console.log('  errores wizard:', wizardErrors.slice(0, 5));
+  await wizardPage.close();
 
   // Enlace de importación: abrir la app con #t=<código> tiene que cargar y
   // GUARDAR ese blanco automáticamente, sin que este navegador lo haya

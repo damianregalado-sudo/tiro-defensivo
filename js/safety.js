@@ -112,21 +112,71 @@ const Safety = (() => {
     });
   }
 
+  // Build .25 — pedido directo: "una vez que ingresa preguntar generar
+  // blanco o usar los guardados... y recién ahí hace la check list de
+  // seguridad". Antes, elegir el modo acá (selectMode) mostraba el
+  // checklist al toque. Ahora elegir el modo sólo pasa al paso siguiente
+  // (elegir blanco — ver #safetyTargetPicker/#safetyLibraryPicker en
+  // index.html, manejados desde app.js); el checklist en sí recién se
+  // muestra con showChecklistForMode(), llamado por app.js una vez que ya
+  // hay un blanco elegido (generado o cargado de la biblioteca), justo
+  // antes de entrar a la cámara.
+  function hideAllSteps() {
+    $('#safetyModePicker').style.display = 'none';
+    $('#safetyTargetPicker').style.display = 'none';
+    $('#safetyLibraryPicker').style.display = 'none';
+    $('#safetyChecklistWrap').style.display = 'none';
+  }
+
+  function modeLabel(m) { return m === 'DRY' ? '🔴 Fuego seco' : '🎯 Fuego real'; }
+
   function selectMode(m) {
     mode = m;
+    hideAllSteps();
+    $('#safetyTargetPicker').style.display = '';
+    $('#pickerModeLabel').textContent = modeLabel(m);
+  }
+
+  // Llamado desde app.js cuando se toca "Usar un blanco guardado" — sólo
+  // cambia qué paso se ve; el llenado de la grilla de miniaturas lo hace
+  // app.js (necesita Storage/Target, que safety.js no conoce).
+  function showLibraryPicker() {
+    hideAllSteps();
+    $('#safetyLibraryPicker').style.display = '';
+    $('#libraryPickerModeLabel').textContent = modeLabel(mode);
+  }
+
+  function showTargetPicker() {
+    hideAllSteps();
+    $('#safetyTargetPicker').style.display = '';
+    $('#pickerModeLabel').textContent = modeLabel(mode);
+  }
+
+  // Llamado desde app.js una vez que ya hay un blanco elegido (generado y
+  // enviado, o tocado en la grilla de guardados) — recién acá se arma/limpia
+  // el checklist correspondiente y se muestra. targetLabel (opcional) se
+  // muestra como una pastilla extra para que quede claro CUÁL blanco se va
+  // a usar mientras se completa el chequeo.
+  function showChecklistForMode(m, targetLabel) {
+    mode = m;
     resetModeState(m);
-    $('#safetyModePicker').style.display = 'none';
+    hideAllSteps();
     $('#safetyChecklistWrap').style.display = '';
     $('#safetyStepsDry').style.display = m === 'DRY' ? '' : 'none';
     $('#safetyStepsLive').style.display = m === 'LIVE' ? '' : 'none';
-    $('#safetyModeLabel').textContent = m === 'DRY' ? '🔴 Fuego seco' : '🎯 Fuego real';
+    $('#safetyModeLabel').textContent = modeLabel(m);
+    const tPill = $('#safetyTargetLabel');
+    if (tPill) {
+      if (targetLabel) { tPill.textContent = '🎯 ' + targetLabel; tPill.style.display = ''; }
+      else { tPill.style.display = 'none'; }
+    }
     onProgress(m);
   }
 
   function changeMode() {
     mode = null;
+    hideAllSteps();
     $('#safetyModePicker').style.display = '';
-    $('#safetyChecklistWrap').style.display = 'none';
   }
 
   function reset() {
@@ -135,6 +185,12 @@ const Safety = (() => {
     onProgress(mode);
   }
 
+  function getMode() { return mode; }
+
+  // Usado por app.js para decidir si hace falta mostrar el checklist de
+  // nuevo o si ya se completó para este modo en la sesión actual.
+  function isModeArmed(m) { return !!m && STATE[m].every(Boolean); }
+
   function init(onArmedCb) {
     onArmed = onArmedCb;
     $$('#safetyStepsDry .slider-track').forEach(track => attachSlider(track, parseInt(track.dataset.idx, 10), 'DRY'));
@@ -142,9 +198,11 @@ const Safety = (() => {
     $('#modeDryBtn').addEventListener('click', () => selectMode('DRY'));
     $('#modeLiveBtn').addEventListener('click', () => selectMode('LIVE'));
     $('#btnChangeMode').addEventListener('click', changeMode);
+    $('#btnChangeModeFromPicker').addEventListener('click', changeMode);
+    $('#btnBackToTargetPicker').addEventListener('click', showTargetPicker);
     $('#btnArm').addEventListener('click', () => { if (mode) onArmed(mode); });
     $('#btnResetSafety').addEventListener('click', reset);
   }
 
-  return { init, reset };
+  return { init, reset, getMode, isModeArmed, showLibraryPicker, showTargetPicker, showChecklistForMode };
 })();

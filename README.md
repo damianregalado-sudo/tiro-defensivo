@@ -446,6 +446,18 @@ Mandaste una captura nueva con tres pedidos concretos más el flash, que sigue s
 
 *Nota honesta*: el arreglo de la fila de estado y la función de escalado por distancia los verifiqué con pruebas automatizadas que miden posiciones/tamaños reales en píxeles, no solo revisión de código. El cambio de forma de la cabeza es una mejora de diseño basada en medidas publicadas de blancos reales, no una medida "oficial" certificada — lo digo así de claro porque no es un bug que se "arregla", es un criterio de diseño que ahora está más cerca de lo real. Sobre el flash: sigue siendo una hipótesis sin confirmar (no bug de este lado, sí un límite del navegador/teléfono) — necesito ese dato del panel de Diagnóstico para poder decir algo más concreto.
 
+**Build 2026-08-28.25 — se reordenó la pantalla de inicio: primero "¿qué vas a practicar hoy?", después "¿generás un blanco nuevo o usás uno guardado?" (con miniaturas reales), y el chequeo de seguridad recién al final, justo antes de la cámara.**
+
+Pediste directamente: "quiero que al ingresar, la primera pregunta sea qué vas a practicar hoy... una vez que ingresa preguntar generar blanco o usar los guardados... si ingresa a los guardados aparecen miniaturas... y al hacer click lo manda para practicar y recién ahí hace la checklist de seguridad" — con la idea de que así quedaría mucho más amigable. Antes, elegir "Fuego seco" o "Fuego real" mostraba el chequeo de seguridad al toque, ANTES de saber siquiera con qué blanco iba a practicar; ahora el orden es el que pediste:
+
+1. **"¿Qué vas a practicar hoy?"** — esto ya era lo primero que se veía al entrar (no hizo falta tocarlo), pero antes elegir acá saltaba directo al chequeo de seguridad.
+2. **"¿Qué blanco vas a usar?"** — paso nuevo. "Generar blanco nuevo" lleva al Generador de siempre, con el modo ya preseleccionado. "Usar un blanco guardado" muestra una grilla con una **miniatura real** de cada blanco guardado (el mismo dibujo que se usa para la vista previa de impresión, no un ícono genérico) — se ve de un vistazo cuál es cuál (puntería/IPSC vs. reacción, y con qué figuras).
+3. **Chequeo de seguridad** — recién acá, ya con el blanco elegido: tocar una miniatura, o generar uno nuevo y tocar "Enviar a Fuego Seco/Real", lleva directo al checklist correspondiente (seco o real, según lo que elegiste en el paso 1), mostrando además una pastilla con el nombre del blanco que está en cola. Al completar los 4 pasos, entra directo a la cámara con ese blanco ya cargado — sin tener que volver a elegirlo.
+
+La barra de pestañas de arriba (01 Seguridad ... 05 Registro) sigue estando, para seguir teniendo acceso directo a Registro o para volver a generar/enviar un blanco a mano sin pasar por todo el flujo de nuevo — y el atajo que ya existía (una vez que armaste el chequeo de seguridad una vez en la sesión, mandar blancos nuevos no te lo vuelve a pedir) se mantiene exactamente igual que antes.
+
+*Nota honesta*: todo lo de arriba lo verifiqué con pruebas automatizadas que recorren el flujo completo en una sesión nueva (sin cámara real, pero sin necesitarla: es navegación, DOM y dibujo en canvas) — que lo primero que se ve al entrar es la pregunta de qué practicar, que elegir un modo no salta directo al checklist, que enviar un blanco sin haber armado todavía manda al checklist (y no a la cámara), que terminar el checklist aterriza en la pestaña correcta con el blanco correcto ya cargado, que las miniaturas de la biblioteca son dibujos reales (no un canvas vacío), y que el atajo de "ya armado, no repetir el checklist" se preserva. No es una hipótesis.
+
 ## Estructura del proyecto
 
 ```
