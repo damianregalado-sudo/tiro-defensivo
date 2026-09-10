@@ -482,6 +482,14 @@ Agregué una verificación nueva, `matchesFiducialRingPattern()`: para cada cand
 
 *Nota honesta*: como en este entorno no hay cámara real para probar, verifiqué la lógica con un lienzo sintético — dibujé a mano un fiducial real, un patrón tipo QR del mismo tamaño y posición, y un bloque sólido oscuro, y corrí el pipeline completo de detección sobre esa imagen fabricada: el fiducial real se acepta (de frente y también rotado ~15° para no romper la tolerancia a ángulo que ya existía), y tanto el patrón QR como el bloque sólido se rechazan. Esto confirma que la LÓGICA discrimina bien los patrones que le diseñé — pero no puedo confirmar todavía que esto alcance para que la cámara real, con su propio ruido, iluminación y desenfoque, deje de confundirse en la práctica. Esa parte sigue dependiendo de que lo prueben en una sesión real — avisame cómo te va.
 
+**Build 2026-09-10.29 — se puede eliminar un blanco guardado directo desde su miniatura.**
+
+Dijiste "acabo de notar que no puedo eliminarlos. falta un boton para eliminar o en la miniatura o en seleccionar blancos y luego eliminar". Tenías razón: la grilla de miniaturas del flujo de inicio (agregada en el build .25 para "usar un blanco guardado") nunca tuvo forma de borrar nada — tocar una miniatura sólo cargaba y mandaba a practicar. La única forma de eliminar seguía siendo la tabla vieja de "Guardados" dentro del Generador.
+
+Agregué un botón chico de eliminar (🗑) superpuesto en la esquina de cada miniatura. Como un botón no puede ir anidado dentro de otro botón, el card de cada blanco pasó de ser un único elemento clickeable a un contenedor con dos botones: uno grande, que sigue cargando y mandando a practicar con un solo toque (sin cambios de comportamiento), y el nuevo, chico, que borra ese blanco sin disparar el de cargar.
+
+*Nota honesta*: verificado con una prueba automatizada (agregar un blanco de prueba, tocar su botón de eliminar aceptando la confirmación, y confirmar que desaparece de la biblioteca guardada sin haber mandado nada a practicar de paso) y con capturas de pantalla mostrando el botón bien ubicado en la esquina de la miniatura, sin taparle el dibujo del blanco.
+
 ## Estructura del proyecto
 
 ```

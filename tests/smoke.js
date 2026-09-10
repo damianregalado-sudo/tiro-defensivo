@@ -143,6 +143,21 @@
 // ruido de cámara/iluminación real, deje de confundirse en la práctica; el
 // lienzo sintético prueba que la LÓGICA discrimina correctamente los
 // patrones, no que el mundo real se comporte igual de limpio.
+// New in .29: pedido directo — "acabo de notar que no puedo eliminarlos.
+// falta un boton para eliminar o en la miniatura o en seleccionar blancos y
+// luego eliminar" (los blancos guardados en la grilla de miniaturas del
+// flujo de inicio, agregada en el build .25 — esa grilla nunca tuvo forma
+// de borrar nada, sólo la tabla vieja de "Guardados" del Generador la
+// tenía). Se agregó un botón chico de eliminar (🗑) superpuesto en la
+// esquina de cada miniatura. Como un <button> no puede ir anidado dentro de
+// otro <button> (HTML inválido), el card dejó de ser un único <button> y
+// pasó a ser un <div> con dos <button> hermanos: uno grande que sigue
+// cargando+mandando a practicar con un toque (comportamiento sin cambios),
+// y el nuevo, chico, que borra con stopPropagation para no disparar el
+// grande sin querer. Se prueba agregando un blanco de prueba a la
+// biblioteca, tocando su botón de eliminar (aceptando el confirm() nativo),
+// y confirmando que desaparece de la biblioteca guardada y que ese toque no
+// disparó además "cargar y practicar" (seguimos en la misma pantalla).
 const { chromium } = require('playwright');
 
 (async () => {
@@ -165,7 +180,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .28', bodyText.includes('build 2026-09-10.28'));
+  check('badge de build dice .29', bodyText.includes('build 2026-09-10.29'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -852,7 +867,42 @@ const { chromium } = require('playwright');
   });
   check('la grilla de "usar guardado" dibuja una miniatura real (no un canvas vacío)', gridCheck.hasCanvas && gridCheck.nonEmpty);
 
-  await wizardPage.click('.saved-target-card');
+  // Build .29 — pedido directo: "no puedo eliminarlos... falta un boton
+  // para eliminar... en la miniatura". El card de cada blanco guardado
+  // ahora tiene un botón chico de eliminar (🗑) superpuesto en la esquina,
+  // separado del botón grande que carga+manda a practicar (no puede ir dos
+  // <button> anidados). Se agrega una guardada de prueba (además de la real
+  // generada arriba, que queda intacta para el test de "tocar miniatura" de
+  // más abajo), se borra con su botón de eliminar, y se confirma que (a)
+  // desaparece de localStorage, y (b) tocar el botón de eliminar NO dispara
+  // además "cargar y practicar" (el stopPropagation tiene que frenar la
+  // burbuja hacia el botón grande) — sigue en el mismo panel de antes.
+  const beforeDeleteCount = await wizardPage.evaluate(() => Storage.get('tm_saved_targets', []).length);
+  const tmpDeleteId = await wizardPage.evaluate(() => {
+    const t = Target.build({ pageSize: 'A4', mode: 'DRY', distDesigned: 3, distSimulated: 15, shapeCount: 2, family: 'reaction', includeQr: true });
+    const id = 'tmp-delete-test-' + t.id;
+    const list = Storage.get('tm_saved_targets', []);
+    list.push({ id, name: 'Borrar de prueba', target: t, createdAt: Date.now() });
+    Storage.set('tm_saved_targets', list);
+    return id;
+  });
+  // Dispara renderHomeSavedGrid() a mano vía el mismo listener 'input' que
+  // usa la búsqueda — más confiable que fill('') para forzar el re-render,
+  // porque el campo ya puede estar vacío (fill a un valor sin cambios no
+  // siempre dispara el evento).
+  await wizardPage.evaluate(() => document.getElementById('homeSavedSearch').dispatchEvent(new Event('input', { bubbles: true })));
+  await wizardPage.waitForTimeout(100);
+  wizardPage.once('dialog', d => d.accept()); // confirm() de "¿Eliminar este blanco guardado?"
+  await wizardPage.click(`[data-del-home="${tmpDeleteId}"]`);
+  await wizardPage.waitForTimeout(150);
+  const afterDelete = await wizardPage.evaluate(() => ({
+    count: Storage.get('tm_saved_targets', []).length,
+    panel: document.querySelector('.panel.active').id,
+  }));
+  check('eliminar una miniatura la saca de la biblioteca guardada', afterDelete.count === beforeDeleteCount);
+  check('eliminar una miniatura no dispara además "cargar y practicar"', afterDelete.panel === 'panel-safety');
+
+  await wizardPage.click('.saved-target-card .stc-open');
   await wizardPage.waitForTimeout(200);
   const afterCardClick = await wizardPage.evaluate(() => document.querySelector('.panel.active').id);
   check('tocar una miniatura ya armada esta sesión manda directo a practicar (sin repetir el checklist)', afterCardClick === 'panel-dry');

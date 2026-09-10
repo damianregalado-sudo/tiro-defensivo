@@ -281,7 +281,13 @@ const App = (() => {
   function deleteSavedTarget(id) {
     if (!confirm('¿Eliminar este blanco guardado? No se puede deshacer.')) return;
     Storage.set('tm_saved_targets', Storage.get('tm_saved_targets', []).filter(r => r.id !== id));
+    // Refresh whichever saved-target views are currently in the DOM — la
+    // tabla vieja de "Guardados" (#savedTargetsBody) y/o la grilla de
+    // miniaturas del wizard (#homeSavedGrid) pueden coexistir según en qué
+    // pantalla esté el usuario, y cada render ya se protege solo si su
+    // contenedor no existe.
     renderSavedTargets();
+    renderHomeSavedGrid();
   }
 
   function renderSavedTargets() {
@@ -331,18 +337,34 @@ const App = (() => {
         : 'Todavía no guardaste ningún blanco. Volvé y elegí "Generar blanco nuevo" — se guarda solo, listo para usar la próxima vez.'}</p>`;
       return;
     }
+    // Build .29 — pedido directo: "falta un boton para eliminar ... en la
+    // miniatura". El card entero solía ser un único <button> que cargaba y
+    // mandaba a practicar con un solo toque (build .25); un <button> de
+    // eliminar no puede ir DENTRO de otro <button> (HTML inválido — el
+    // navegador rompe el anidado), así que el card pasó a ser un <div>
+    // contenedor con dos botones hermanos: uno grande que sigue haciendo
+    // "cargar y practicar" (misma área/comportamiento de siempre) y uno
+    // chico superpuesto en la esquina para eliminar, con su propio
+    // manejador que corta la propagación para no disparar el de cargar.
     grid.innerHTML = list.map(r => `
-      <button class="saved-target-card" type="button" data-load-home="${r.id}">
-        <span class="stc-thumb-wrap"><canvas data-thumb-id="${r.id}"></canvas></span>
-        <span class="stc-name">${escapeHtml(r.name)}${r.target.family === 'ipsc' ? ' <span class="pill" style="padding:1px 6px;font-size:10px;">IPSC</span>' : ''}</span>
-        <span class="stc-meta">${PAGE_SPECS[r.target.pageSize].label} · ${r.target.mode === 'LIVE' ? 'Real' : 'Seco'} · ${fmtDate(new Date(r.createdAt).toISOString())}</span>
-      </button>
+      <div class="saved-target-card">
+        <button type="button" class="stc-del" data-del-home="${r.id}" title="Eliminar blanco guardado" aria-label="Eliminar blanco guardado">🗑</button>
+        <button type="button" class="stc-open" data-load-home="${r.id}">
+          <span class="stc-thumb-wrap"><canvas data-thumb-id="${r.id}"></canvas></span>
+          <span class="stc-name">${escapeHtml(r.name)}${r.target.family === 'ipsc' ? ' <span class="pill" style="padding:1px 6px;font-size:10px;">IPSC</span>' : ''}</span>
+          <span class="stc-meta">${PAGE_SPECS[r.target.pageSize].label} · ${r.target.mode === 'LIVE' ? 'Real' : 'Seco'} · ${fmtDate(new Date(r.createdAt).toISOString())}</span>
+        </button>
+      </div>
     `).join('');
     list.forEach(r => {
       const cv = grid.querySelector(`canvas[data-thumb-id="${r.id}"]`);
       if (cv) Target.drawPrintPreview(cv, r.target);
     });
     $$('#homeSavedGrid [data-load-home]').forEach(b => b.addEventListener('click', () => chooseLibraryTarget(b.dataset.loadHome)));
+    $$('#homeSavedGrid [data-del-home]').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      deleteSavedTarget(b.dataset.delHome);
+    }));
   }
 
   // Tocar una miniatura: carga ese blanco como activo Y lo manda derecho a
