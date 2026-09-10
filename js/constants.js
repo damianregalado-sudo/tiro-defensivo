@@ -26,10 +26,27 @@ const PAGE_SPECS = {
 };
 
 // Fiducial corner markers, in grid units, measured from the safe-canvas edge.
-const FIDUCIAL_MARGIN = 40;
-const FIDUCIAL_SIZE = 46;
+// Build 2026-09-10 — pedido directo: "le cuesta identificarlos y los
+// confunde con los qr y el otro codigo del plano". El patrón del fiducial
+// (cuadrado negro, anillo blanco, cuadrado negro chico al medio) es, en
+// forma, casi idéntico al patrón de detección de esquina de un QR (también
+// negro-blanco-negro anidado) — y findFiducialCandidates() en vision.js
+// busca CUALQUIER blob oscuro con forma de cuadrado en toda la imagen, no
+// solo el patrón exacto del fiducial, así que a cierta distancia/ángulo un
+// finder pattern del QR (o un bloque oscuro del código del plano) puede
+// terminar más cerca de una esquina del cuadro que el fiducial real, sobre
+// todo si el fiducial real es chico/borroso y su contorno no pasa el
+// filtro de forma. Agrandarlo (46→72, +56%) lo hace más robusto de
+// detectar de por sí (más píxeles = contorno sobrevive mejor el umbral y
+// approxPolyDP a distancia/desenfoque) y menos probable que pierda el
+// "más cercano a esta esquina" contra el QR o el código. El margen también
+// subió (40→58) para que seguir teniendo el mismo colchón hasta el borde
+// del área segura (antes 17 unidades libres, ahora 22) en vez de que el
+// fiducial más grande quede pegado al borde de impresión.
+const FIDUCIAL_MARGIN = 58;
+const FIDUCIAL_SIZE = 72;
 // Centered on the bottom edge, well clear of all 4 corner fiducials (each
-// corner fiducial occupies roughly [17,63] to [937,983] in grid units).
+// corner fiducial occupies roughly [22,94] to [906,978] in grid units).
 // This used to sit in the bottom-right corner and directly overlapped that
 // fiducial (see printed samples showing the metatag painted over the
 // corner marker) — that overlap was corrupting the corner the auto-lock

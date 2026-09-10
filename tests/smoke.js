@@ -105,6 +105,44 @@
 // torso viejo (por el hombro angosto de antes) ahora da 'D' (torso), no
 // null — confirma el ensanche real, no solo un cambio cosmético que no
 // afecte el hit-test.
+// New in .27: pedido directo — "le cuesta identificarlos y los confunde
+// con los qr y el otro codigo del plano" (los fiduciales de esquina que
+// usa la cámara para calibrar). El patrón del fiducial es casi idéntico en
+// forma al finder pattern de un QR (negro-blanco-negro anidado), y
+// findFiducialCandidates() en vision.js busca cualquier blob oscuro
+// cuadrado en toda la imagen — a cierta distancia/ángulo el QR o el código
+// del plano pueden terminar ganándole al fiducial real. FIDUCIAL_SIZE pasó
+// de 46 a 72 unidades de grilla (+56%, ver constants.js) para que sea más
+// fácil de detectar de por sí. Se prueba midiendo el tamaño REAL en
+// píxeles del fiducial dibujado en el preview (no sólo revisando el número
+// en el código) — confirma que de verdad se dibuja más grande, no sólo que
+// la constante cambió sin efecto visible.
+// New in .28: pedido directo — "y si lo hacemos desde ya? modificamos algo"
+// (seguir de una vez con la corrección más profunda que quedó pendiente al
+// final del build .27: agrandar el fiducial ayuda, pero no resuelve la causa
+// de fondo, porque findFiducialCandidates() en vision.js sólo miraba forma/
+// tamaño/posición del contorno, nunca el PATRÓN interno que hace a un
+// fiducial distinto de un finder pattern de QR o de un bloque del código de
+// metadatos). Se agregó matchesFiducialRingPattern(): muestrea, en las 4
+// direcciones cardinales desde el centro de cada candidato, si la secuencia
+// radial es negro→blanco→negro (la firma exacta de drawFiducial() en
+// target.js) en vez de aceptar cualquier blob cuadrado oscuro del tamaño
+// correcto. Se prueba con un lienzo sintético (sin cámara real, que acá no
+// se puede simular) corriendo el pipeline COMPLETO de detección de
+// candidatos sobre formas dibujadas a mano: un fiducial real se sigue
+// aceptando (de frente y en ángulo oblicuo ~15°, para no romper la
+// tolerancia a ángulo agregada en un build anterior), mientras que un
+// patrón tipo "ojo de buey" de QR y un bloque oscuro sólido — mismo tamaño y
+// posición que un fiducial real, la confusión exacta que reportó Damian —
+// quedan afuera. Un caso límite real apareció al diseñarlo: el contorno
+// interno del anillo de un QR (que findContours también devuelve por
+// separado) podía dar un falso "negro-blanco" a su propia escala; por eso
+// la verificación exige la secuencia completa de 3 puntos, no 2. Lo que NO
+// se puede verificar acá — y sigue dependiendo de que Damian lo pruebe con
+// la cámara real — es si esto alcanza para que la detección en vivo, con
+// ruido de cámara/iluminación real, deje de confundirse en la práctica; el
+// lienzo sintético prueba que la LÓGICA discrimina correctamente los
+// patrones, no que el mundo real se comporte igual de limpio.
 const { chromium } = require('playwright');
 
 (async () => {
@@ -127,7 +165,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .26', bodyText.includes('build 2026-08-28.26'));
+  check('badge de build dice .28', bodyText.includes('build 2026-09-10.28'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -321,6 +359,116 @@ const { chromium } = require('playwright');
     return nonBgPixels;
   });
   check('el preview de un blanco IPSC dibuja algo (silueta+fiduciales), no queda en blanco', drewSomething > 5);
+
+  // ---- Fiduciales de esquina más grandes (nuevo en build .27) -----------
+  // Pedido directo: "le cuesta identificarlos y los confunde con los qr y
+  // el otro codigo del plano" — FIDUCIAL_SIZE pasó de 46 a 72 unidades de
+  // grilla (+56%) para que la cámara los detecte de forma más confiable.
+  // No hay una API expuesta para leer las constantes directamente (son
+  // `const` de módulo, no exports), así que se mide el tamaño REAL
+  // dibujado en píxeles del fiducial superior-izquierdo del preview de
+  // impresión y se confirma que es notablemente más grande que el tamaño
+  // viejo — el mismo enfoque de "medir el píxel real", no solo revisar el
+  // número en el código, que ya se usó para el escalado por distancia.
+  const fiducialBox = await page.evaluate(() => {
+    const t = Target.build({ pageSize: 'A4', mode: 'DRY', distDesigned: 15, distSimulated: 15, family: 'ipsc', includeQr: false });
+    const canvas = document.createElement('canvas');
+    Target.drawPrintPreview(canvas, t);
+    const ctx = canvas.getContext('2d');
+    const { width, height } = canvas;
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let minX = width, maxX = 0, minY = height, maxY = 0, found = false;
+    // El fiducial superior-izquierdo vive en el primer cuarto del canvas —
+    // buscar sólo ahí evita confundirlo con cualquier otra cosa oscura.
+    for (let y = 0; y < height * 0.25; y++) {
+      for (let x = 0; x < width * 0.25; x++) {
+        const i = (y * width + x) * 4;
+        if (data[i] < 40 && data[i + 1] < 40 && data[i + 2] < 40) {
+          found = true;
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+    }
+    return found ? { w: maxX - minX, h: maxY - minY } : null;
+  });
+  // Con el tamaño viejo (46/1000 de la grilla) el fiducial dibujado en un
+  // preview de ~240px de ancho medía unos 7-8px; con 72/1000 mide ~11-13px
+  // — el umbral de 10px queda claramente por encima del tamaño viejo sin
+  // ser tan justo que un cambio mínimo de redondeo lo haga fallar.
+  check('el fiducial de esquina se agrandó visiblemente (se dibuja más grande en píxeles)', !!fiducialBox && fiducialBox.w >= 10 && fiducialBox.h >= 10);
+
+  // ---- Regresión build .28: los fiduciales se distinguen de QR/códigos por
+  // su PATRÓN, no sólo por tamaño/posición ---------------------------------
+  // Build .27 agrandó los fiduciales, pero Damian siguió reportando que la
+  // cámara los confunde con el QR y el código del plano — porque el
+  // algoritmo de detección sólo miraba forma/tamaño/posición del contorno,
+  // nunca el patrón interno (anillo blanco + centro negro) que hace a un
+  // fiducial distinto de cualquier otra mancha oscura cuadrada. Este build
+  // agrega esa verificación (Vision._test.matchesFiducialRingPattern,
+  // expuesta sólo para tests) y la integra en findFiducialCandidates.
+  //
+  // No hay cámara real en este entorno de pruebas, así que se verifica con
+  // un lienzo sintético: se dibuja (a) un fiducial real (con el mismo código
+  // que drawFiducial en target.js), (b) un patrón tipo "ojo de buey" de
+  // código QR (núcleo 3x3 negro / anillo blanco / borde negro, misma
+  // proporción 7 módulos que un QR real) del mismo tamaño, y (c) un bloque
+  // sólido oscuro (como los del código de metadatos). Se corre el pipeline
+  // COMPLETO de detección de candidatos (no sólo la función aislada) para
+  // confirmar que el fiducial real sigue siendo aceptado como candidato y
+  // que el patrón QR y el bloque sólido ya NO lo son — incluyendo el caso
+  // límite real que apareció al diseñar esto: findContours devuelve también
+  // el contorno interno del anillo del QR (el borde entre su borde negro y
+  // su anillo blanco), que por sí solo parecía tener la firma "negro-blanco"
+  // de un fiducial visto a la escala equivocada; por eso la verificación
+  // exige la secuencia completa negro→blanco→negro (3 muestras, no 2). Se
+  // prueba también un fiducial real rotado ~15° para confirmar que la
+  // tolerancia a ángulo oblicuo (agregada en un build anterior) no se rompió.
+  const ringPatternResult = await page.evaluate(async () => {
+    await Vision.cvReady;
+    const W = 300, H = 300;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    function drawRealFiducial(cx, cy, s) {
+      ctx.save(); ctx.translate(cx, cy);
+      ctx.fillStyle = '#111'; ctx.fillRect(-s / 2, -s / 2, s, s);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.12;
+      ctx.strokeRect(-s / 2 + s * 0.14, -s / 2 + s * 0.14, s - s * 0.28, s - s * 0.28);
+      ctx.fillStyle = '#111'; ctx.fillRect(-s * 0.14, -s * 0.14, s * 0.28, s * 0.28);
+      ctx.restore();
+    }
+    function drawQrFinderLike(cx, cy, s) {
+      const m = s / 7;
+      ctx.save(); ctx.translate(cx, cy);
+      ctx.fillStyle = '#111'; ctx.fillRect(-s / 2, -s / 2, s, s);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-s / 2 + m, -s / 2 + m, s - 2 * m, s - 2 * m);
+      ctx.fillStyle = '#111'; ctx.fillRect(-s / 2 + 2 * m, -s / 2 + 2 * m, s - 4 * m, s - 4 * m);
+      ctx.restore();
+    }
+    drawRealFiducial(70, 70, 72); // control: fiducial real de frente
+    drawQrFinderLike(220, 70, 72); // ojo de buey estilo QR, mismo tamaño
+    ctx.fillStyle = '#111'; ctx.fillRect(220 - 36, 220 - 36, 72, 72); // bloque sólido
+    ctx.save(); ctx.translate(70, 220); ctx.rotate(15 * Math.PI / 180);
+    ctx.translate(-70, -220); drawRealFiducial(70, 220, 72); ctx.restore(); // fiducial real, oblicuo
+
+    const gray = cv.imread(canvas);
+    cv.cvtColor(gray, gray, cv.COLOR_RGBA2GRAY);
+    const candidates = Vision._test.findFiducialCandidates(gray, W * H);
+    gray.delete();
+    const near = (x, y) => candidates.some(c => Math.hypot(c.x - x, c.y - y) < 15);
+    return {
+      realAccepted: near(70, 70),
+      qrRejected: !near(220, 70),
+      solidBlockRejected: !near(220, 220),
+      obliqueRealAccepted: near(70, 220),
+    };
+  });
+  check('el candidato a fiducial real (de frente) se acepta', ringPatternResult.realAccepted);
+  check('un patrón tipo QR del mismo tamaño/posición se rechaza (no es un fiducial real)', ringPatternResult.qrRejected);
+  check('un bloque oscuro sólido (tipo código de metadatos) se rechaza', ringPatternResult.solidBlockRejected);
+  check('un fiducial real visto en ángulo oblicuo (~15°) igual se acepta', ringPatternResult.obliqueRealAccepted);
 
   // ---- Regresión build .15b: activar Fuego Seco por primera vez en la
   // sesión no debe romper la creación de #dryVideo ------------------------

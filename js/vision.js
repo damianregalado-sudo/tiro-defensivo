@@ -429,6 +429,57 @@ const Vision = (() => {
     return [tl, tr, bl, br];
   }
 
+  // Verifies that a candidate blob actually has our fiducial's black/white
+  // RING pattern, not just its square silhouette. Added because a QR finder
+  // pattern (the three big squares in a QR code) and the dark blocks in the
+  // metatag barcode both pass the size/aspect/4-corner filters above just as
+  // easily as a real fiducial — "confunde con los QR y el otro codigo del
+  // plano" per Damian's report. Enlarging the fiducial (build .27) reduced
+  // but didn't remove this, since neither fix checked the actual pattern.
+  //
+  // The discriminator: expressed as a fraction of half-width from the
+  // blob's center (0 = center, 1 = edge), our drawFiducial() draws
+  //   BLACK [0, 0.60]  WHITE [0.60, 0.84]  BLACK [0.84, 1.0]
+  // while a standard QR finder pattern (3x3 black core, 1-module white ring,
+  // 1-module black border) draws
+  //   BLACK [0, 0.43]  WHITE [0.43, 0.71]  BLACK [0.71, 1.0]
+  // — at radial fraction 0.5 ours is still black while a QR finder is
+  // already white, and at 0.75 ours is white while a QR finder is black.
+  // Sampling both radii along the 4 cardinal directions and requiring
+  // "inner dark, outer light" (our signature) on a majority of them rejects
+  // QR-finder-shaped and solid-block blobs without needing the full warp.
+  function matchesFiducialRingPattern(bin, cx, cy, halfW) {
+    if (halfW < 4) return true; // too small to sample meaningfully — don't reject on size alone
+    const cols = bin.cols, rows = bin.rows;
+    const sample = (x, y) => {
+      const xi = Math.round(x), yi = Math.round(y);
+      if (xi < 0 || yi < 0 || xi >= cols || yi >= rows) return null;
+      return bin.ucharPtr(yi, xi)[0]; // bin is THRESH_BINARY_INV: 255 = dark(foreground), 0 = light
+    };
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let matches = 0;
+    for (const [dx, dy] of dirs) {
+      // Three samples, not two: a candidate that's really just an inner
+      // sub-region of a bigger nested shape (e.g. the boundary between a QR
+      // finder pattern's outer black border and its white ring, which
+      // findContours also returns as its own separate 4-vertex quad) can
+      // still fake "inner dark, outer light" at 0.5/0.75 if its own
+      // core/ring happens to land at those fractions of ITS OWN halfW —
+      // that false positive is exactly what showed up when this was first
+      // tested against a synthetic QR-finder-shaped blob. Requiring the
+      // full black→white→black sequence (adding a near-edge sample that
+      // must be dark again, matching our fiducial's outer border) rejects
+      // it: a QR finder's white ring still extends out past that point,
+      // so its near-edge sample comes back light instead of dark.
+      const inner = sample(cx + dx * halfW * 0.5, cy + dy * halfW * 0.5);
+      const mid = sample(cx + dx * halfW * 0.75, cy + dy * halfW * 0.75);
+      const outer = sample(cx + dx * halfW * 0.92, cy + dy * halfW * 0.92);
+      if (inner === null || mid === null || outer === null) continue;
+      if (inner > 128 && mid < 128 && outer > 128) matches++; // black-white-black — our fiducial's signature
+    }
+    return matches >= 2;
+  }
+
   function findFiducialCandidates(gray, frameArea) {
     const bin = new cv.Mat();
     cv.threshold(gray, bin, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
@@ -471,7 +522,11 @@ const Vision = (() => {
             // locking at anything but a very square-on angle.
             let sumX = 0, sumY = 0;
             for (let k = 0; k < 4; k++) { sumX += approx.data32S[k * 2]; sumY += approx.data32S[k * 2 + 1]; }
-            candidates.push({ x: sumX / 4, y: sumY / 4, area });
+            const cx = sumX / 4, cy = sumY / 4;
+            const halfW = (rect.width + rect.height) / 4;
+            if (matchesFiducialRingPattern(bin, cx, cy, halfW)) {
+              candidates.push({ x: cx, y: cy, area });
+            }
           }
         }
         approx.delete();
@@ -1021,5 +1076,10 @@ const Vision = (() => {
     detectLaserInMat, grayFromMat, detectNewHole, decodeMetatag,
     HOLE_STABILITY_FRAMES,
     setDebug, getLastLaserDebug, getExposureInfo, getZoomInfo,
+    // Exposed only so the test suite can exercise the fiducial-detection
+    // internals directly (build a synthetic binary Mat, confirm a real
+    // fiducial pattern passes and a QR-finder-pattern-like blob doesn't)
+    // without needing a live camera. Not used by the app itself.
+    _test: { findFiducialCandidates, matchesFiducialRingPattern },
   };
 })();
