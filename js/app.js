@@ -290,6 +290,19 @@ const App = (() => {
     renderHomeSavedGrid();
   }
 
+  // Build .30 — pedido directo: "falta otro boton para reimprimir un blanco
+  // ya hecho". Target.exportPdf(target) ya existe y no depende de ningún
+  // estado global aparte del target que se le pasa — es exactamente lo que
+  // usa el botón "Exportar PDF" del Generador sobre el target ACTIVO — así
+  // que reimprimir un blanco guardado es simplemente llamarla con el target
+  // guardado de ese registro, sin necesidad de cargarlo como activo primero
+  // ni de navegar a ningún otro lado.
+  function reprintSavedTarget(id) {
+    const rec = Storage.get('tm_saved_targets', []).find(r => r.id === id);
+    if (!rec) return;
+    Target.exportPdf(rec.target);
+  }
+
   function renderSavedTargets() {
     let list = Storage.get('tm_saved_targets', []);
     const q = ($('#savedTargetSearch') && $('#savedTargetSearch').value || '').trim().toLowerCase();
@@ -307,11 +320,13 @@ const App = (() => {
         <td>${fmtDate(new Date(r.createdAt).toISOString())}</td>
         <td style="white-space:nowrap;">
           <button class="btn btn-ghost" style="padding:4px 9px;font-size:12px;" data-load="${r.id}">Cargar</button>
+          <button class="btn btn-ghost" style="padding:4px 9px;font-size:12px;" data-print="${r.id}">Reimprimir</button>
           <button class="btn btn-ghost" style="padding:4px 9px;font-size:12px;color:var(--danger);" data-del="${r.id}">Eliminar</button>
         </td>
       </tr>
     `).join('') || `<tr><td colspan="5" style="color:var(--text-faint);">${q ? 'Ningún blanco guardado coincide con la búsqueda.' : 'Todavía no guardaste ningún blanco. Generá uno y tocá "Guardar blanco" (o simplemente exportá el PDF — ahora se guarda solo).'}</td></tr>`;
     $$('#savedTargetsBody [data-load]').forEach(b => b.addEventListener('click', () => loadSavedTarget(b.dataset.load)));
+    $$('#savedTargetsBody [data-print]').forEach(b => b.addEventListener('click', () => reprintSavedTarget(b.dataset.print)));
     $$('#savedTargetsBody [data-del]').forEach(b => b.addEventListener('click', () => deleteSavedTarget(b.dataset.del)));
   }
 
@@ -346,8 +361,12 @@ const App = (() => {
     // "cargar y practicar" (misma área/comportamiento de siempre) y uno
     // chico superpuesto en la esquina para eliminar, con su propio
     // manejador que corta la propagación para no disparar el de cargar.
+    // Build .30 — mismo motivo, ahora para "falta otro boton para
+    // reimprimir un blanco ya hecho": un tercer botón chico, simétrico al
+    // de eliminar, en la esquina opuesta.
     grid.innerHTML = list.map(r => `
       <div class="saved-target-card">
+        <button type="button" class="stc-print" data-print-home="${r.id}" title="Reimprimir / exportar PDF" aria-label="Reimprimir este blanco">🖨</button>
         <button type="button" class="stc-del" data-del-home="${r.id}" title="Eliminar blanco guardado" aria-label="Eliminar blanco guardado">🗑</button>
         <button type="button" class="stc-open" data-load-home="${r.id}">
           <span class="stc-thumb-wrap"><canvas data-thumb-id="${r.id}"></canvas></span>
@@ -364,6 +383,10 @@ const App = (() => {
     $$('#homeSavedGrid [data-del-home]').forEach(b => b.addEventListener('click', (ev) => {
       ev.stopPropagation();
       deleteSavedTarget(b.dataset.delHome);
+    }));
+    $$('#homeSavedGrid [data-print-home]').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      reprintSavedTarget(b.dataset.printHome);
     }));
   }
 

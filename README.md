@@ -490,6 +490,14 @@ Agregué un botón chico de eliminar (🗑) superpuesto en la esquina de cada mi
 
 *Nota honesta*: verificado con una prueba automatizada (agregar un blanco de prueba, tocar su botón de eliminar aceptando la confirmación, y confirmar que desaparece de la biblioteca guardada sin haber mandado nada a practicar de paso) y con capturas de pantalla mostrando el botón bien ubicado en la esquina de la miniatura, sin taparle el dibujo del blanco.
 
+**Build 2026-09-10.30 — se puede reimprimir un blanco guardado directo desde su miniatura (o desde la tabla de Guardados).**
+
+Dijiste "falta otro boton para reimprimir un blanco ya hecho" — seguía faltando poder volver a sacar el PDF de un blanco que ya generaste, sin tener que recrearlo de cero. Agregué un segundo botón chico (🖨), espejado en la esquina opuesta a la de eliminar en cada miniatura, y también una columna "Reimprimir" en la tabla vieja de "Guardados" del Generador, para que sea consistente en las dos pantallas donde se ven blancos guardados.
+
+Reutiliza tal cual `Target.exportPdf()`, la misma función que ya usa el botón "Exportar PDF" del Generador, pero pasándole directamente el target guardado de ese blanco — no hace falta cargarlo como activo ni navegar a ningún otro lado primero, el PDF se genera al toque.
+
+*Nota honesta*: la generación del PDF en sí (jsPDF) depende de una librería que se carga de una CDN bloqueada en este entorno de pruebas — la misma limitación ya documentada para el resto de exportación de PDF y QR en este proyecto, así que no puedo confirmar acá que el archivo realmente se genera. Lo que sí verifiqué con una prueba automatizada: que tocar el botón llama a `Target.exportPdf()` con el blanco CORRECTO (el de esa miniatura, no el que esté activo en ese momento), y que ese toque no dispara de paso "cargar y practicar" — junto con capturas de pantalla confirmando que el botón queda bien ubicado, sin pisar el de eliminar ni el dibujo del blanco.
+
 ## Estructura del proyecto
 
 ```

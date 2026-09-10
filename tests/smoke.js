@@ -158,6 +158,21 @@
 // biblioteca, tocando su botón de eliminar (aceptando el confirm() nativo),
 // y confirmando que desaparece de la biblioteca guardada y que ese toque no
 // disparó además "cargar y practicar" (seguimos en la misma pantalla).
+// New in .30: pedido directo — "falta otro boton para reimprimir un blanco
+// ya hecho". Mismo patrón que el botón de eliminar del build anterior: un
+// segundo botón chico (🖨), espejado a la esquina opuesta de la miniatura,
+// que llama a Target.exportPdf() con el target GUARDADO de ese card (no con
+// el target activo) — reutiliza tal cual la misma función que ya usa
+// "Exportar PDF" en el Generador, sin necesitar cargar el blanco primero.
+// Se agregó también a la tabla vieja de "Guardados" del Generador, junto a
+// "Cargar"/"Eliminar", para que sea consistente en las dos pantallas donde
+// se ven blancos guardados. jsPDF se carga de una CDN bloqueada en este
+// entorno de pruebas (ya documentado para el resto de exportPdf/QR), así
+// que no se puede confirmar acá que el PDF se genera de verdad — pero sí se
+// prueba, sin depender de esa CDN, que tocar el botón llama a
+// Target.exportPdf() con el target CORRECTO (reemplazando la función
+// temporalmente para capturar el llamado) y que ese toque, igual que el de
+// eliminar, no dispara además "cargar y practicar".
 const { chromium } = require('playwright');
 
 (async () => {
@@ -180,7 +195,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .29', bodyText.includes('build 2026-09-10.29'));
+  check('badge de build dice .30', bodyText.includes('build 2026-09-10.30'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -901,6 +916,37 @@ const { chromium } = require('playwright');
   }));
   check('eliminar una miniatura la saca de la biblioteca guardada', afterDelete.count === beforeDeleteCount);
   check('eliminar una miniatura no dispara además "cargar y practicar"', afterDelete.panel === 'panel-safety');
+
+  // Build .30 — pedido directo: "falta otro boton para reimprimir un blanco
+  // ya hecho". Reutiliza Target.exportPdf(target) tal cual (el mismo camino
+  // que ya usa "Exportar PDF" en el Generador) pasándole el target GUARDADO
+  // de ese card, sin cargarlo como activo. jsPDF se carga de una CDN
+  // bloqueada en este entorno de pruebas (la misma limitación ya documentada
+  // para el resto de exportPdf/QR), así que no se puede confirmar acá que
+  // el PDF realmente se genera — eso ya queda fuera del alcance de cualquier
+  // test automatizado en este proyecto. Lo que SÍ se puede probar sin
+  // depender de esa CDN: que tocar el botón de reimprimir llama a
+  // Target.exportPdf() con el target CORRECTO (el de ese card, no el activo)
+  // y que, igual que con eliminar, el toque no dispara además "cargar y
+  // practicar" (stopPropagation funciona ahí también).
+  const printTargetId = await wizardPage.evaluate(() => {
+    const card = document.querySelector('.saved-target-card [data-print-home]');
+    return card ? card.dataset.printHome : null;
+  });
+  const expectedTargetId = await wizardPage.evaluate((id) => {
+    const rec = Storage.get('tm_saved_targets', []).find(r => r.id === id);
+    return rec ? rec.target.id : null;
+  }, printTargetId);
+  await wizardPage.evaluate(() => { window.__exportPdfCalledWith = null; window.__realExportPdf = Target.exportPdf; Target.exportPdf = (t) => { window.__exportPdfCalledWith = t.id; }; });
+  await wizardPage.click('.saved-target-card .stc-print');
+  await wizardPage.waitForTimeout(100);
+  const afterPrint = await wizardPage.evaluate(() => ({
+    calledWith: window.__exportPdfCalledWith,
+    panel: document.querySelector('.panel.active').id,
+  }));
+  await wizardPage.evaluate(() => { Target.exportPdf = window.__realExportPdf; });
+  check('reimprimir llama a Target.exportPdf() con el blanco correcto', !!printTargetId && afterPrint.calledWith === expectedTargetId);
+  check('reimprimir no dispara además "cargar y practicar"', afterPrint.panel === 'panel-safety');
 
   await wizardPage.click('.saved-target-card .stc-open');
   await wizardPage.waitForTimeout(200);
