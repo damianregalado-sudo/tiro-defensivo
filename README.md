@@ -498,6 +498,34 @@ Reutiliza tal cual `Target.exportPdf()`, la misma función que ya usa el botón 
 
 *Nota honesta*: la generación del PDF en sí (jsPDF) depende de una librería que se carga de una CDN bloqueada en este entorno de pruebas — la misma limitación ya documentada para el resto de exportación de PDF y QR en este proyecto, así que no puedo confirmar acá que el archivo realmente se genera. Lo que sí verifiqué con una prueba automatizada: que tocar el botón llama a `Target.exportPdf()` con el blanco CORRECTO (el de esa miniatura, no el que esté activo en ese momento), y que ese toque no dispara de paso "cargar y practicar" — junto con capturas de pantalla confirmando que el botón queda bien ubicado, sin pisar el de eliminar ni el dibujo del blanco.
 
+**Build 2026-09-10.31 — blancos de referencia (IDPA, IPSC, FBI Qual, BT-5S, Dot Torture, silueta de cabeza, rehén) con el puntaje real de cada disciplina.**
+
+Veníamos digitalizando a mano, zona por zona, las hojas de blancos reales que subiste: medí cada contorno píxel a píxel sobre las imágenes originales (1179x1525) y las fuimos corrigiendo juntos hasta que calzaron con el dibujo impreso. Este build es el paso siguiente: meter esas zonas dentro de la app para que puntúe de verdad.
+
+Lo primero que salió de relevar cómo se puntúan estos blancos en la realidad es que **no hay un único sistema** — son cuatro, y por eso el código tiene un campo `modelo` en vez de asumir A/C/D en todos lados:
+
+- **IPSC/USPSA** (anidado, más es mejor): A=5 siempre; C=4 en major y 3 en minor; D=2 en major y 1 en minor; errar resta 10, igual que pegarle a un no-shoot. El puntaje real de una etapa no son los puntos crudos sino el *hit factor* (puntos ÷ tiempo).
+- **IDPA** (anidado, pero al revés): no suma puntos, **descuenta tiempo**. Cada "punto abajo" es 1 segundo agregado al tiempo crudo — la zona -0 vale 0, la -1 vale 1, la -3 vale 3 y errar vale 5. Por eso el motor devuelve un campo `sentido` ('mayor'/'menor'): un total de 4 en IDPA es un resultado *peor* que un 0, y la pantalla lo aclara al lado del número ("menos es mejor") para que nadie lo lea al revés.
+- **FBI Qual** (binario): no tiene anillos — 2 puntos todo lo que cae dentro de la botella, 0 afuera. 50 tiros = 100 puntos, 80% aprueba (90% para instructores).
+- **Dot Torture** (puntos independientes): 1 punto por impacto sobre 10 círculos separados, y se aprueba únicamente con 50/50.
+- **Rehén** (discriminación): el único donde el error pesa más que el acierto — la cabeza de la amenaza suma, pegarle al rehén resta.
+
+Cómo quedó integrado: en el paso de "¿qué blanco vas a usar?" hay ahora una tercera opción, "Usar un blanco de referencia". A diferencia de las otras dos, estos blancos **no los genera la app** — son hojas que se imprimen aparte (quedaron en `img/blancos/`, y cada tarjeta tiene su botón "Imprimir hoja"); la app sólo las puntúa. Por debajo, un blanco de referencia es el mismo objeto `target` de siempre con `family: 'ipsc'` más un campo `refBlanco`, así que reusa entero el camino de Puntería que ya existía: el gate de armado, el overlay, el historial de series y —importante— el fallback de toque manual.
+
+Dos detalles que vale la pena dejar anotados porque no son obvios:
+
+*Los círculos se guardan como elipses, no como círculos.* La grilla interna de 1000x1000 no es isotrópica respecto de la hoja (las imágenes de referencia son 1179x1525), así que un círculo perfecto impreso **no** es un círculo en coordenadas de grilla. La primera versión guardaba un radio promediado y eso hacía que el hit-test se pasara ~13% en horizontal y se quedara ~13% corto en vertical — tiros buenos contados como fuera y al revés. Con `rx`/`ry` separados el test es exacto.
+
+*Las coordenadas están generadas, no tipeadas.* La primera versión de `js/blancos.js` la escribí a mano y una verificación automática contra la geometría original encontró 22 diferencias, dos de ellas de casi 10% en el radio de las zonas del headshot. Ahora el catálogo se genera por script desde la geometría validada y hay un chequeo que confirma que las 29 formas coinciden exactamente.
+
+*Nota honesta — qué quedó verificado y qué no*: la suite automatizada pasó de 86 a 122 pruebas, y las 36 nuevas cubren el hit-test de los cuatro modelos de puntaje (incluyendo que las zonas anidadas resuelvan a la más interna, que IPSC cambie C y D entre major y minor, que el espacio entre dos puntos del Dot Torture no valga nada y que pegarle al rehén reste), todo el camino de UI hasta mandar un blanco de referencia a practicar, que "Imprimir hoja" no dispare además "mandar a practicar", que exportar PDF de un blanco de referencia avise en vez de dibujar la silueta equivocada, y —la más importante— que un **toque manual sobre el overlay se puntúe con la zona correcta del blanco de referencia**, recorriendo el mismo camino que un impacto de láser. Las 3 pruebas que siguen fallando son las de siempre en este entorno: jsPDF y la librería de QR se cargan de una CDN bloqueada acá.
+
+Lo que **no** está verificado: que un impacto **real detectado por la cámara** sobre la hoja impresa caiga en la zona que corresponde. Eso depende de la homografía y los fiduciales sobre papel físico, que sigo sin poder probar acá — es exactamente la misma limitación documentada en todo el resto de este README. Las zonas están medidas sobre la imagen y verificadas contra ella, pero la cadena completa "papel impreso → cámara → grilla → zona" necesita tu prueba con el equipo real. Si al tirar notás que los impactos se puntúan corridos de forma consistente (siempre para el mismo lado), avisame: eso apuntaría a la calibración de la hoja, no a las zonas.
+
+Dos de los siete blancos tienen **puntaje propuesto por nosotros, no oficial**: el BT-5S (es un blanco de calificación policial con "zonas sombreadas", sin tabla publicada) y la silueta de cabeza (no tiene estándar). En ambos usamos una escala 5/3/1. Las tarjetas lo dicen con una pastilla "puntaje propuesto" a propósito — no quiero que alguien entrene contra un número inventado creyendo que es la regla oficial de una disciplina.
+
+Queda pendiente el **dartboard**: es un modelo polar (anillos × 20 sectores) y necesito definir antes si el puntaje va por anillo (con multiplicador, como dardos reales) o sólo por sector/número para practicar el callout en voz alta. La lógica a programar cambia bastante según cuál sea, así que no lo incluí todavía.
+
 ## Estructura del proyecto
 
 ```
@@ -507,16 +535,18 @@ targetmind-web/
 ├── sw.js                 # service worker (cache offline)
 ├── css/style.css         # todos los estilos
 ├── icons/                 # íconos de la PWA
+├── img/blancos/           # hojas de los blancos de referencia (se imprimen aparte)
 └── js/
     ├── constants.js       # colores, tipos de figura, tamaños de papel, grilla
     ├── utils.js            # helpers ($ , rand, clamp, etc.)
     ├── storage.js           # wrapper de localStorage
     ├── target.js             # generación del blanco + dibujo en canvas + export PDF (jsPDF)
-    ├── safety.js              # gate de seguridad (slide-to-confirm x4)
-    ├── vision.js               # cámara + OpenCV.js: anclajes, homografía, láser, impactos
-    ├── drill.js                 # máquina de estados del drill de fuego seco
-    ├── livefire.js                # modo fuego real: grupos, MOA, virtual patching
-    └── app.js                      # bootstrap: pestañas, wiring de botones, historial
+    ├── blancos.js             # blancos de referencia: zonas digitalizadas + 4 modelos de puntaje
+    ├── safety.js               # gate de seguridad (slide-to-confirm x4)
+    ├── vision.js                # cámara + OpenCV.js: anclajes, homografía, láser, impactos
+    ├── drill.js                  # máquina de estados del drill de fuego seco
+    ├── livefire.js                 # modo fuego real: grupos, MOA, virtual patching
+    └── app.js                       # bootstrap: pestañas, wiring de botones, historial
 ```
 
 ## Próximos pasos sugeridos

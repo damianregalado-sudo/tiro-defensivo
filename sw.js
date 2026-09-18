@@ -13,14 +13,21 @@
 // strictly required for correctness anymore (network-first means updates
 // show up regardless), but it guarantees old cached entries get swept on
 // activate instead of accumulating forever.
-const CACHE_VERSION = 'v53';
+const CACHE_VERSION = 'v54';
 const CACHE = 'entrenatiro-' + CACHE_VERSION;
 const SHELL = [
   './', './index.html', './manifest.json',
   './css/style.css',
-  './js/utils.js', './js/constants.js', './js/storage.js', './js/target.js',
+  './js/utils.js', './js/constants.js', './js/storage.js', './js/target.js', './js/blancos.js',
   './js/safety.js', './js/vision.js', './js/drill.js', './js/livefire.js', './js/app.js',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
+  // Build .31 — las hojas de los blancos de referencia. Van en el SHELL
+  // (no cargadas a demanda) porque el caso de uso de esta app es
+  // justamente estar en un lugar sin señal: si el tirador quiere imprimir
+  // o mirar la hoja del IDPA en el polígono, tiene que estar ya cacheada.
+  './img/blancos/idpa.jpg', './img/blancos/ipsc.jpg', './img/blancos/fbiqual.jpg',
+  './img/blancos/bt5s.jpg', './img/blancos/dottorture.jpg', './img/blancos/headshot.jpg',
+  './img/blancos/hostage.jpg',
 ];
 
 self.addEventListener('install', (event) => {

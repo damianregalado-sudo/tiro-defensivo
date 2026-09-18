@@ -195,7 +195,7 @@ const { chromium } = require('playwright');
   if (consoleErrors.length) console.log('  errores:', consoleErrors.slice(0, 5));
 
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check('badge de build dice .30', bodyText.includes('build 2026-09-10.30'));
+  check('badge de build dice .31', bodyText.includes('build 2026-09-10.31'));
   check('nota técnica "Sobre esta app" ya no está visible', !bodyText.includes('Sobre esta app'));
   check('"JSON del blanco (Target Metatag' + ' decodificado)" no visible', !bodyText.includes('Target Metatag'));
   check('botón "Ver JSON" ya no existe', (await page.$$('[data-view]')).length === 0);
@@ -994,6 +994,242 @@ const { chromium } = require('playwright');
   // primerísima visita). `controllerchange` es un evento normal de
   // EventTarget, así que se puede disparar a mano con dispatchEvent() para
   // probar la lógica sin depender de un segundo deploy real.
+
+  // ===================== Build .31 — blancos de referencia =====================
+  // Los blancos de competencia/calificación reales (IDPA, IPSC, FBI Qual,
+  // BT-5S, Dot Torture, silueta de cabeza, rehén) digitalizados en
+  // js/blancos.js. Lo que SÍ se puede probar acá, sin cámara ni láser: el
+  // hit-test de las zonas contra las cuatro lógicas de puntaje distintas, y
+  // todo el camino de UI hasta mandar uno a practicar. Lo que NO se puede
+  // probar acá y queda verificado solo por revisión de código: que un
+  // impacto REAL detectado por la cámara sobre la hoja impresa caiga en la
+  // zona que corresponde — eso depende de la homografía/fiduciales sobre
+  // papel físico, que no existe en este entorno.
+  const zonas = await page.evaluate(() => {
+    const ev = (b, x, y, o) => { const r = Blancos.evaluar(b, x, y, o); return r.zonaId + '/' + r.bucket + '/' + r.valor; };
+    return {
+      ipscA: ev('ipsc', 500, 400), ipscC: ev('ipsc', 330, 300), ipscD: ev('ipsc', 200, 500),
+      ipscMiss: ev('ipsc', 50, 50), ipscCminor: ev('ipsc', 330, 300, { powerFactor: 'minor' }),
+      idpa0: ev('idpa', 485, 404), idpa1: ev('idpa', 330, 404), idpa3: ev('idpa', 200, 500),
+      idpaMiss: ev('idpa', 20, 20),
+      fbiIn: ev('fbiqual', 500, 600), fbiOut: ev('fbiqual', 100, 600),
+      dotIn: ev('dottorture', 510, 134), dotBetween: ev('dottorture', 350, 134),
+      rehenAmenaza: ev('hostage', 496, 231), rehenRehen: ev('hostage', 678, 249),
+      headA: ev('headshot', 511, 420), headC: ev('headshot', 450, 420), headD: ev('headshot', 380, 500),
+      cantidad: Blancos.listar().length,
+      totalIdpa: JSON.stringify(Blancos.totalDe('idpa', [{ valor: 0 }, { valor: 1 }, { valor: 3 }])),
+    };
+  });
+  // IPSC: A=5 siempre; C y D cambian según major/minor; errar resta 10.
+  check('IPSC: centro del torso da zona A (5 pts)', zonas.ipscA === 'A/A/5');
+  check('IPSC: hombro da zona C (4 pts en major)', zonas.ipscC === 'C/C/4');
+  check('IPSC: la misma zona C da 3 pts en minor', zonas.ipscCminor === 'C/C/3');
+  check('IPSC: borde da zona D (2 pts en major)', zonas.ipscD === 'D/D/2');
+  check('IPSC: fuera del blanco resta 10', zonas.ipscMiss === 'miss/miss/-10');
+  // IDPA no suma puntos: descuenta segundos, así que -0 vale 0 y errar 5.
+  check('IDPA: -0 vale 0 (no suma, descuenta)', zonas.idpa0 === '-0/A/0');
+  check('IDPA: -1 vale 1 segundo', zonas.idpa1 === '-1/C/1');
+  check('IDPA: -3 vale 3 segundos', zonas.idpa3 === '-3/D/3');
+  check('IDPA: errar vale 5 segundos', zonas.idpaMiss === '-5/miss/5');
+  check('IDPA: el total se marca como "menos es mejor"', zonas.totalIdpa.includes('"sentido":"menor"') && zonas.totalIdpa.includes('"total":4'));
+  // FBI Qual es binario: 2 adentro, 0 afuera, sin sub-zonas.
+  check('FBI Qual: adentro vale 2 puntos', zonas.fbiIn === 'adentro/A/2');
+  check('FBI Qual: afuera vale 0 (no resta)', zonas.fbiOut === 'miss/miss/0');
+  // Dot Torture: puntos independientes, el espacio entre dos puntos NO vale.
+  check('Dot Torture: impacto en un punto vale 1', zonas.dotIn === 'dot1/A/1');
+  check('Dot Torture: entre dos puntos no vale nada', zonas.dotBetween === 'miss/miss/0');
+  // Rehén: el único blanco donde pegarle a una figura RESTA.
+  check('Rehén: la cabeza de la amenaza suma 5', zonas.rehenAmenaza === 'amenaza/A/5');
+  check('Rehén: pegarle al rehén resta 10 y cuenta como penalización', zonas.rehenRehen === 'rehen/penal/-10');
+  check('Cabeza: entre los ojos es la zona de mayor valor', zonas.headA === 'A/A/5');
+  check('Cabeza: el triángulo ojos/nariz vale 3', zonas.headC === 'C/C/3');
+  check('Cabeza: el resto de la cabeza vale 1', zonas.headD === 'D/D/1');
+  check('el catálogo tiene los 7 blancos de referencia', zonas.cantidad === 7);
+
+  // Anidado: un impacto en el centro está TAMBIÉN dentro de C y de D
+  // geométricamente — tiene que ganar la zona más interna, no la primera
+  // que contenga el punto por casualidad del orden de la lista.
+  const anidado = await page.evaluate(() => {
+    const dentroDeD = Blancos.get('ipsc').zonas.find(z => z.id === 'D').formas[0];
+    const p = { x: 500, y: 400 };
+    // el punto central cae dentro del polígono D…
+    const poly = dentroDeD.puntos;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+      if (((yi > p.y) !== (yj > p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi)) inside = !inside;
+    }
+    return { dentroDeD: inside, resuelveComo: Blancos.evaluar('ipsc', p.x, p.y).zonaId };
+  });
+  check('zonas anidadas: el centro está dentro de D pero se resuelve como A', anidado.dentroDeD && anidado.resuelveComo === 'A');
+
+  // La elipse importa: la grilla 1000x1000 no es isotrópica respecto de la
+  // hoja, así que guardar un radio único haría que el hit-test se pase en
+  // horizontal y se quede corto en vertical. Se verifica que las formas
+  // circulares tengan rx != ry (es decir, que sean elipses de verdad).
+  const esElipse = await page.evaluate(() => {
+    const f = Blancos.get('headshot').zonas.find(z => z.id === 'D').formas[0];
+    return { tipo: f.tipo, distintos: f.rx !== f.ry };
+  });
+  check('los círculos se guardan como elipse (rx != ry) por la grilla anisotrópica', esElipse.tipo === 'elipse' && esElipse.distintos);
+
+  // ---- UI: el tercer camino del selector de blanco ----
+  const refPage = await browser.newPage();
+  const refErrors = [];
+  refPage.on('console', (m) => { if (m.type() === 'error') refErrors.push(m.text()); });
+  refPage.on('pageerror', (e) => refErrors.push('pageerror: ' + e.message));
+  await refPage.goto('http://localhost:8934/index.html', { waitUntil: 'load' });
+  await refPage.waitForTimeout(800);
+  await refPage.click('#modeDryBtn');
+  await refPage.waitForTimeout(80);
+  await refPage.click('#pickRefBtn');
+  await refPage.waitForTimeout(200);
+  const grillaRef = await refPage.evaluate(() => ({
+    visible: document.getElementById('safetyRefPicker').style.display !== 'none',
+    tarjetas: document.querySelectorAll('#refTargetGrid [data-ref]').length > 0,
+    cuantos: new Set([...document.querySelectorAll('#refTargetGrid [data-ref]')].map(e => e.dataset.ref)).size,
+    conImagen: document.querySelectorAll('#refTargetGrid img').length,
+    // los dos blancos sin tabla oficial tienen que decirlo en la tarjeta
+    avisaPropuesto: document.querySelector('#refTargetGrid').textContent.includes('puntaje propuesto'),
+  }));
+  check('"Usar un blanco de referencia" muestra el paso de blancos de referencia', grillaRef.visible);
+  check('la grilla lista los 7 blancos de referencia', grillaRef.cuantos === 7);
+  check('cada blanco de referencia muestra la hoja que hay que imprimir', grillaRef.conImagen === 7);
+  check('las tarjetas avisan cuáles tienen puntaje propuesto (no oficial)', grillaRef.avisaPropuesto);
+
+  // Tocar "Imprimir hoja" NO tiene que mandar además a practicar (mismo
+  // stopPropagation que ya tienen eliminar/reimprimir en la grilla de
+  // guardados). window.open se reemplaza para no abrir una pestaña real.
+  await refPage.evaluate(() => { window.__abrio = null; window.open = (u) => { window.__abrio = u; return null; }; });
+  await refPage.click('#refTargetGrid [data-print-ref="idpa"]');
+  await refPage.waitForTimeout(150);
+  const trasImprimir = await refPage.evaluate(() => ({
+    abrio: window.__abrio,
+    sigueEnElPaso: document.getElementById('safetyRefPicker').style.display !== 'none',
+    target: App.currentTarget(),
+  }));
+  check('"Imprimir hoja" abre la imagen del blanco', trasImprimir.abrio === 'img/blancos/idpa.jpg');
+  check('"Imprimir hoja" no dispara además "mandar a practicar"', trasImprimir.sigueEnElPaso && !trasImprimir.target);
+
+  // Tocar la tarjeta sí: deja ese blanco como activo, con su refBlanco, y
+  // pasa al chequeo de seguridad (todavía no se armó nada en esta pestaña).
+  await refPage.click('#refTargetGrid .saved-target-name[data-ref="ipsc"]');
+  await refPage.waitForTimeout(250);
+  const trasElegir = await refPage.evaluate(() => {
+    const t = App.currentTarget();
+    return {
+      refBlanco: t && t.refBlanco,
+      familia: t && t.family,
+      sinFiguras: !!t && Array.isArray(t.shapes) && t.shapes.length === 0,
+      checklistVisible: document.getElementById('safetyChecklistWrap').style.display !== 'none',
+    };
+  });
+  check('tocar un blanco de referencia lo deja activo con su refBlanco', trasElegir.refBlanco === 'ipsc');
+  check('el blanco de referencia reusa la familia de puntería', trasElegir.familia === 'ipsc');
+  check('un blanco de referencia no trae figuras de reacción', trasElegir.sinFiguras);
+  check('elegir un blanco de referencia pasa al chequeo de seguridad', trasElegir.checklistVisible);
+
+  // Un blanco de referencia no se puede exportar como PDF: su hoja es una
+  // imagen aparte, y dibujar la silueta de la app en su lugar daría zonas
+  // que no coinciden con el papel que el tirador tiene colgado.
+  const pdfRef = await refPage.evaluate(() => {
+    let aviso = null;
+    const alertOrig = window.alert;
+    window.alert = (m) => { aviso = m; };
+    Target.exportPdf(App.currentTarget());
+    window.alert = alertOrig;
+    return aviso;
+  });
+  check('exportar PDF de un blanco de referencia avisa en vez de dibujar la silueta equivocada',
+    !!pdfRef && pdfRef.includes('blanco de referencia'));
+
+  // El overlay de la cámara tiene que dibujar las zonas del blanco de
+  // referencia (no la silueta de la app). Se dibuja sobre un canvas suelto
+  // y se confirma que pintó algo — mismo criterio que el test del preview
+  // de impresión, que tampoco puede validar la forma exacta.
+  const dibujo = await refPage.evaluate(() => {
+    const cv = document.createElement('canvas');
+    cv.width = 300; cv.height = 300;
+    const ctx = cv.getContext('2d');
+    Target.drawGrid(ctx, 300, 300, App.currentTarget(), 1, true);
+    const d = ctx.getImageData(0, 0, 300, 300).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return true;
+    return false;
+  });
+  check('el overlay dibuja las zonas del blanco de referencia', dibujo);
+
+
+  // Fallback de toque manual sobre un blanco de referencia. Esto es lo que
+  // más importa verificar de toda la build: la regla del proyecto es que
+  // TODA pantalla con cámara tenga un camino manual para registrar el
+  // disparo, y un blanco de referencia no puede ser la excepción. No hace
+  // falta cámara para probarlo — onManualClick() convierte las coordenadas
+  // del toque a la grilla 1000x1000 y llama al mismo registerPunteriaHit()
+  // que usa el láser, así que un click sintético sobre el overlay recorre
+  // exactamente el mismo camino de puntaje que un impacto real.
+  await refPage.evaluate(() => { App.setTab('dry'); DryFire.ensureScope(); });
+  await refPage.waitForTimeout(300);
+  await refPage.evaluate(() => DryFire.startPunteria());
+  await refPage.waitForTimeout(100);
+  const toqueManual = await refPage.evaluate(() => {
+    const ov = document.getElementById('dryOverlay');
+    if (!ov) return { sinOverlay: true };
+    // Mismo estado que deja la rama BLOQUEADO de la cámara real (drill.js):
+    // mostrar el contenedor del overlay, darle tamaño y engancharle el
+    // handler de toque. Sin cámara no se llega ahí solo, pero el camino que
+    // se quiere probar (toque -> coordenadas de grilla -> puntaje) es el
+    // mismo. Mostrar el contenedor no es cosmético: con display:none el
+    // overlay mide 0x0, todo toque cae en (0,0) de la grilla y se puntúa
+    // como fuera del blanco.
+    document.getElementById('dryLockedWrap').style.display = 'block';
+    ov.width = 600; ov.height = 600;
+    ov.style.width = '600px'; ov.style.height = '600px';
+    ov.addEventListener('click', DryFire.handleManualTap);
+    const r = ov.getBoundingClientRect();
+    // (500,400) en grilla = centro del torso del IPSC = zona A (5 pts).
+    const px = r.left + (500 / 1000) * r.width;
+    const py = r.top + (400 / 1000) * r.height;
+    ov.dispatchEvent(new MouseEvent('click', { clientX: px, clientY: py, bubbles: true }));
+    return {
+      disparos: document.getElementById('statPunteriaShots').textContent,
+      zonaA: document.getElementById('statPunteriaA').textContent,
+      puntos: document.getElementById('statPunteriaPuntos').textContent,
+      tarjetaVisible: document.getElementById('statPunteriaPuntosWrap').style.display !== 'none',
+    };
+  });
+  check('toque manual sobre un blanco de referencia registra el disparo', toqueManual.disparos === '1');
+  check('el toque manual se puntúa con la zona correcta del blanco de referencia', toqueManual.zonaA === '1');
+  check('el total muestra el puntaje real de ese blanco (5 pts en zona A de IPSC)', toqueManual.puntos === '5 pts');
+  check('la tarjeta de puntaje solo aparece en blancos de referencia', toqueManual.tarjetaVisible);
+
+  // Los rótulos de las filas de zonas tienen que decir la verdad del blanco
+  // elegido: IPSC sí tiene A/C/D, pero Dot Torture no tiene zonas (son 10
+  // puntos independientes) y el FBI no tiene sub-zonas. Dejar "Zona C: 0"
+  // fijo en esos casos sugeriría una zona que en la hoja real no existe.
+  const rotulos = await refPage.evaluate(() => {
+    const leer = () => ({
+      a: document.getElementById('statPunteriaALabel').textContent,
+      cVisible: document.getElementById('statPunteriaCRow').style.display !== 'none',
+      dVisible: document.getElementById('statPunteriaDRow').style.display !== 'none',
+    });
+    const ipsc = leer();
+    // cambiar a Dot Torture por el mismo camino que usa la app
+    const t = App.currentTarget();
+    t.refBlanco = 'dottorture';
+    DryFire.ensureScope();
+    DryFire.startPunteria();
+    const dot = leer();
+    return { ipsc, dot };
+  });
+  check('en IPSC las filas se rotulan como zonas A/C/D', rotulos.ipsc.a === 'Zona A' && rotulos.ipsc.cVisible && rotulos.ipsc.dVisible);
+  check('en Dot Torture se rotula "Impactos" y se esconden las zonas que no existen',
+    rotulos.dot.a === 'Impactos' && !rotulos.dot.cVisible && !rotulos.dot.dVisible);
+
+  check('el camino de blancos de referencia no tira errores de JS propios',
+    refErrors.filter(e => !e.includes('ERR_TUNNEL_CONNECTION_FAILED') && !e.includes('Failed to load resource')).length === 0);
+  if (refErrors.length) console.log('  (errores de red esperables en este entorno:', refErrors.length, ')');
+  await refPage.close();
+
   const bannerHiddenAfterFirstLoad = await page.evaluate(() => document.getElementById('updateBanner').hidden);
   check('el cartel de actualización no aparece en la instalación inicial', bannerHiddenAfterFirstLoad);
 

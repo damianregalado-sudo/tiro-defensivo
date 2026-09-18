@@ -639,7 +639,15 @@ const Target = (() => {
     drawFiducial(ctx, w - FIDUCIAL_MARGIN * sx, FIDUCIAL_MARGIN * sy, fid);
     drawFiducial(ctx, FIDUCIAL_MARGIN * sx, h - FIDUCIAL_MARGIN * sy, fid);
     drawFiducial(ctx, w - FIDUCIAL_MARGIN * sx, h - FIDUCIAL_MARGIN * sy, fid);
-    if (target.family === 'ipsc') {
+    // Build .31 — blancos de referencia: si este blanco es uno de los
+    // impresos aparte (IDPA/IPSC oficial/FBI/BT-5S/Dot Torture/cabeza/rehén,
+    // ver js/blancos.js), lo que hay debajo de la cámara NO es la silueta
+    // que dibuja esta app, así que dibujar drawIpscSilhouette() acá sería
+    // mostrarle al tirador zonas que no existen en su hoja. En ese caso se
+    // dibuja el contorno de las zonas REALES de ese blanco.
+    if (target.refBlanco && typeof Blancos !== 'undefined' && Blancos.existe(target.refBlanco)) {
+      Blancos.dibujar(ctx, target.refBlanco, sx, sy, 0, 0);
+    } else if (target.family === 'ipsc') {
       drawIpscSilhouette(ctx, sx, sy, 0, 0, outline, distScaleOf(target));
     } else {
       target.shapes.forEach(s => drawShape(ctx, s, sx, sy, 0, 0, outline));
@@ -680,7 +688,11 @@ const Target = (() => {
     drawFiducial(ctx, safeX + fm * sx, safeY + safeH - fm * sy, fid);
     drawFiducial(ctx, safeX + safeW - fm * sx, safeY + safeH - fm * sy, fid);
 
-    if (target.family === 'ipsc') {
+    // Build .31 — ver la nota en drawGrid(): para un blanco de referencia lo
+    // que corresponde mostrar son SUS zonas, no la silueta de la app.
+    if (target.refBlanco && typeof Blancos !== 'undefined' && Blancos.existe(target.refBlanco)) {
+      Blancos.dibujar(ctx, target.refBlanco, sx, sy, safeX, safeY);
+    } else if (target.family === 'ipsc') {
       drawIpscSilhouette(ctx, sx, sy, safeX, safeY, false, distScaleOf(target));
     } else {
       target.shapes.forEach(s => drawShape(ctx, s, sx, sy, safeX, safeY));
@@ -754,6 +766,15 @@ const Target = (() => {
   // Real vector PDF export (jsPDF) at true physical scale — this is the file
   // you actually print. mm units throughout, matches drawPrintPreview 1:1.
   function exportPdf(target) {
+    // Build .31 — un blanco de referencia (IDPA/IPSC/FBI/BT-5S/Dot Torture/
+    // cabeza/rehén) NO se genera acá: su hoja es una imagen propia que se
+    // imprime aparte. Exportarlo como PDF dibujaría la silueta de la app,
+    // que no es lo que el tirador tiene colgado — peor que no hacer nada,
+    // porque las zonas no coincidirían con el papel. Por eso se corta acá.
+    if (target && target.refBlanco) {
+      alert('Este es un blanco de referencia: su hoja se imprime desde la imagen del blanco (img/blancos/), no se genera desde la app. La app sólo puntúa los impactos sobre esa hoja.');
+      return;
+    }
     if (!window.jspdf) {
       alert('jsPDF no cargó (sin conexión a internet). Conectate a internet y volvé a intentar — la app funciona offline salvo esta librería.');
       return;

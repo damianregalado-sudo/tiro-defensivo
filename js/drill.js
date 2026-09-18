@@ -227,6 +227,19 @@ const DryFire = (() => {
     const isIpsc = target.family === 'ipsc';
     $('#drySideReaction').style.display = isIpsc ? 'none' : '';
     $('#drySideIpsc').style.display = isIpsc ? '' : 'none';
+    // Build .31 — el texto fijo de este panel decía "Puntería estilo IPSC…
+    // (A/C/D/fuera)", que para un blanco de referencia puede ser
+    // directamente falso: en Dot Torture no hay zonas A/C/D sino 10 puntos
+    // independientes, y en el de rehén hay una figura que NO se debe
+    // disparar. Se reemplaza por la regla real del blanco elegido.
+    const desc = $('#punteriaDesc');
+    if (desc) {
+      const ref = target.refBlanco && typeof Blancos !== 'undefined' && Blancos.existe(target.refBlanco)
+        ? Blancos.get(target.refBlanco) : null;
+      desc.textContent = ref
+        ? `${ref.nombre}: ${ref.regla}${ref.oficial ? '' : ' (puntaje propuesto por nosotros, este blanco no tiene tabla oficial publicada)'}`
+        : 'Puntería estilo IPSC: sin consigna ni tiempo — apuntá y dispará tantas veces como quieras. Cada disparo se anota según la zona donde cayó (A/C/D/fuera).';
+    }
     // OJO: #dryPrompt vive DENTRO del innerHTML que arma wrap.innerHTML más
     // abajo — no existe todavía en el DOM la primera vez que corre esta
     // función. Antes había acá un `$('#dryPrompt').style.display = 'none';`
@@ -327,10 +340,12 @@ const DryFire = (() => {
     $('#statPunteriaC').textContent = '0';
     $('#statPunteriaD').textContent = '0';
     $('#statPunteriaMiss').textContent = '0';
+    if ($('#statPunteriaPuntos')) $('#statPunteriaPuntos').textContent = '0';
+    if ($('#statPunteriaPenal')) $('#statPunteriaPenal').textContent = '0';
   }
 
   function startPunteria() {
-    punteria = { active: true, shots: [], tally: { A: 0, C: 0, D: 0, miss: 0 }, seriesCount: 0 };
+    punteria = { active: true, shots: [], tally: { A: 0, C: 0, D: 0, miss: 0, penal: 0 }, puntos: 0, seriesCount: 0 };
     $('#btnStartPunteria').style.display = 'none';
     $('#btnNewPunteriaSerie').style.display = '';
     $('#btnStopPunteria').style.display = '';
@@ -354,7 +369,8 @@ const DryFire = (() => {
     if (!punteria) return;
     if (punteria.shots.length) logPunteriaSerie();
     punteria.shots = [];
-    punteria.tally = { A: 0, C: 0, D: 0, miss: 0 };
+    punteria.tally = { A: 0, C: 0, D: 0, miss: 0, penal: 0 };
+    punteria.puntos = 0;
     drawOverlay();
     updatePunteriaStats();
   }
@@ -369,7 +385,14 @@ const DryFire = (() => {
   function logPunteriaSerie() {
     const t = punteria.tally;
     const hist = Storage.get('tm_punteria_history', []);
-    hist.unshift({ date: new Date().toISOString(), mode: 'DRY', shots: punteria.shots.length, a: t.A, c: t.C, d: t.D, miss: t.miss });
+    // Build .31 — se guarda además qué blanco de referencia era y el total
+    // numérico de la serie. En los blancos generados por la app ambos van
+    // en null/undefined, que es exactamente lo que ya había en el historial
+    // hasta esta build, así que los registros viejos siguen leyéndose igual.
+    const refId = (target && target.refBlanco) || null;
+    hist.unshift({ date: new Date().toISOString(), mode: 'DRY', shots: punteria.shots.length,
+      a: t.A, c: t.C, d: t.D, miss: t.miss, penal: t.penal || 0,
+      blanco: refId, puntos: refId ? (punteria.puntos || 0) : null });
     Storage.set('tm_punteria_history', hist.slice(0, 100));
     App.renderHistory();
     punteria.seriesCount++;
@@ -380,6 +403,25 @@ const DryFire = (() => {
 
   function registerPunteriaHit(gx, gy, source) {
     if (!punteria || !punteria.active) return;
+    // Build .31 — blancos de referencia (IDPA/IPSC/FBI/BT-5S/Dot Torture/
+    // cabeza/rehén): estos NO se evalúan contra la silueta que genera la
+    // app sino contra las zonas reales del blanco impreso, que además no
+    // siempre son A/C/D anidadas — hay blancos binarios (FBI), de puntos
+    // independientes (Dot Torture) y de discriminación (rehén, donde pegarle
+    // a la figura equivocada RESTA). js/blancos.js resuelve los cuatro
+    // modelos y devuelve, además de la zona, en qué contador de esta misma
+    // pantalla suma (`bucket`), así que la UI de puntería se reusa tal cual.
+    // Tampoco se les aplica distScaleOf(): un blanco de referencia se imprime
+    // a su tamaño, no se achica por distancia simulada como los generados.
+    if (target && target.refBlanco && typeof Blancos !== 'undefined' && Blancos.existe(target.refBlanco)) {
+      const ev = Blancos.evaluar(target.refBlanco, gx, gy, { powerFactor: punteria.powerFactor });
+      punteria.shots.push({ gx, gy, zone: ev.bucket === 'penal' ? null : ev.bucket, zonaId: ev.zonaId, valor: ev.valor, source });
+      punteria.tally[ev.bucket] = (punteria.tally[ev.bucket] || 0) + 1;
+      punteria.puntos = (punteria.puntos || 0) + ev.valor;
+      drawOverlay();
+      updatePunteriaStats();
+      return;
+    }
     // Build .24: el factor de distancia simulada (ver Target.distScaleOf)
     // hace que la silueta pueda salir impresa más chica que el tamaño
     // completo — el hit-test tiene que evaluarse contra ESA silueta, no
@@ -400,6 +442,49 @@ const DryFire = (() => {
     $('#statPunteriaC').textContent = punteria.tally.C;
     $('#statPunteriaD').textContent = punteria.tally.D;
     $('#statPunteriaMiss').textContent = punteria.tally.miss;
+    // Build .31 — el total numérico solo tiene sentido en un blanco de
+    // referencia (los generados por la app no tienen tabla de puntaje
+    // propia, solo la clasificación A/C/D), así que la tarjeta entera se
+    // muestra/oculta según eso en vez de mostrar un 0 sin significado.
+    const wrap = $('#statPunteriaPuntosWrap');
+    if (!wrap) return;
+    const ref = target && target.refBlanco && typeof Blancos !== 'undefined' && Blancos.existe(target.refBlanco)
+      ? Blancos.get(target.refBlanco) : null;
+    // Rótulos de las tres filas de zonas. En un blanco generado por la app
+    // son A/C/D y listo; en uno de referencia hay que decir la verdad de ESE
+    // blanco: IDPA las llama -0/-1/-3, el FBI no tiene sub-zonas (solo
+    // adentro/afuera) y Dot Torture no tiene zonas en absoluto — son 10
+    // puntos independientes. Dejar "Zona C: 0" fijo en esos casos no es un
+    // detalle cosmético: sugiere que existe una zona que en la hoja real no
+    // está, y que el tirador podría creer que le está errando.
+    const etiquetas = (() => {
+      if (!ref) return { a: 'Zona A', c: 'Zona C', d: 'Zona D' };
+      if (ref.modelo === 'puntos') return { a: 'Impactos', c: null, d: null };
+      if (ref.modelo === 'binario') return { a: 'Adentro', c: null, d: null };
+      if (ref.modelo === 'discriminacion') return { a: 'A la amenaza', c: null, d: null };
+      const ids = ref.zonas.map(z => z.id);
+      return { a: `Zona ${ids[0]}`, c: ids[1] ? `Zona ${ids[1]}` : null, d: ids[2] ? `Zona ${ids[2]}` : null };
+    })();
+    [['A', etiquetas.a], ['C', etiquetas.c], ['D', etiquetas.d]].forEach(([k, txt]) => {
+      const row = $('#statPunteria' + k + 'Row');
+      const lab = $('#statPunteria' + k + 'Label');
+      if (!row || !lab) return;
+      row.style.display = txt ? '' : 'none';
+      if (txt) lab.textContent = txt;
+    });
+    if (!ref) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    const total = punteria.puntos || 0;
+    $('#statPunteriaPuntos').textContent = `${total} ${ref.unidad}`;
+    // IDPA no suma: descuenta (cada punto abajo = 1 segundo). Decirlo al
+    // lado del número evita que alguien lea "4" como "me fue bien".
+    $('#statPunteriaPuntosHint').textContent = ref.sentido === 'menor' ? 'menos es mejor' : 'más es mejor';
+    const penales = punteria.tally.penal || 0;
+    const penalEl = $('#statPunteriaPenal');
+    if (penalEl) {
+      penalEl.parentElement.style.display = ref.modelo === 'discriminacion' ? '' : 'none';
+      penalEl.textContent = penales;
+    }
   }
 
   // Color por zona — mismo esquema que usa livefire.js para sus impactos,
@@ -1234,5 +1319,16 @@ const DryFire = (() => {
     getAudioCuesOn: () => audioCuesOn, getCueOrder: () => cueOrder, getDifficulty,
     setupCtaBar,
     startPunteria, newPunteriaSerie, stopPunteria,
+    // Build .31 — el fallback de toque manual (registrar el disparo tocando
+    // la pantalla en vez de que lo detecte el láser) es una regla fija de
+    // este proyecto: toda pantalla con cámara tiene que tenerlo. Hasta acá
+    // no había forma de probarlo automáticamente, porque el listener se
+    // engancha recién cuando la cámara llega a BLOQUEADO y eso necesita
+    // hardware real. Exportarlo permite que tests/smoke.js lo enganche
+    // igual que lo hace esa rama y dispare un toque sintético, recorriendo
+    // el mismo camino de puntaje que un impacto de láser. Es el único
+    // motivo por el que está exportado; la app sigue usando la función
+    // directamente desde adentro.
+    handleManualTap: onManualClick,
   };
 })();

@@ -39,7 +39,7 @@
       </div>
     </div>
     <div class="system-status">
-      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-09-10.30</span>
+      <span class="pill mono" id="buildBadge" style="margin-right:8px;">build 2026-09-10.31</span>
       <span class="dot" id="statusDot"></span>
       <span id="statusText">ESTADO DE SEGURIDAD: BLOQUEADO</span>
     </div>
@@ -99,7 +99,26 @@
             <span class="mode-title">Usar un blanco guardado</span>
             <span class="mode-desc">Elegí uno de tu biblioteca — útil si ya tenés la hoja impresa de antes.</span>
           </button>
+          <!-- Build .31 — tercera opción: los blancos de referencia
+               (IDPA/IPSC/FBI/BT-5S/Dot Torture/cabeza/rehén). A diferencia
+               de los otros dos, estos no los genera la app: son hojas que se
+               imprimen aparte y la app solo las puntúa. -->
+          <button class="mode-option" id="pickRefBtn" type="button">
+            <span class="mode-icon">🎖️</span>
+            <span class="mode-title">Usar un blanco de referencia</span>
+            <span class="mode-desc">IDPA, IPSC, FBI Qual, BT-5S, Dot Torture y más — con el puntaje real de cada uno.</span>
+          </button>
         </div>
+      </div>
+
+      <div id="safetyRefPicker" style="display:none;">
+        <div class="btn-row" style="margin-bottom:14px;">
+          <span class="pill accent" id="refPickerModeLabel"></span>
+          <button class="btn btn-ghost" id="btnBackToTargetPickerFromRef" style="margin-left:auto;">Volver</button>
+        </div>
+        <h3 style="margin:0 0 4px;">Elegí un blanco de referencia</h3>
+        <p class="sub">Estos blancos no los genera la app: imprimí la hoja correspondiente y la app puntúa los impactos con la tabla real de cada disciplina. Tocá uno para mandarlo a practicar.</p>
+        <div class="saved-target-grid" id="refTargetGrid"></div>
       </div>
 
       <div id="safetyLibraryPicker" style="display:none;">
@@ -395,16 +414,29 @@
         </div>
 
         <div id="drySideIpsc" style="display:none;">
-          <p class="sub">Puntería estilo IPSC: sin consigna ni tiempo — apuntá y dispará tantas veces como quieras. Cada disparo se anota según la zona donde cayó (A/C/D/fuera).</p>
+          <p class="sub" id="punteriaDesc">Puntería estilo IPSC: sin consigna ni tiempo — apuntá y dispará tantas veces como quieras. Cada disparo se anota según la zona donde cayó (A/C/D/fuera).</p>
           <button class="btn btn-accent" id="btnStartPunteria" disabled>▶ Iniciar sesión de puntería</button>
           <button class="btn btn-ghost" id="btnNewPunteriaSerie" style="display:none;">Nueva serie</button>
           <button class="btn btn-ghost" id="btnStopPunteria" style="display:none;">■ Finalizar sesión</button>
 
           <div class="stat-row"><span>Disparos</span><span class="v" id="statPunteriaShots">0</span></div>
-          <div class="stat-row"><span>Zona A</span><span class="v success-txt" id="statPunteriaA">0</span></div>
-          <div class="stat-row"><span>Zona C</span><span class="v" id="statPunteriaC">0</span></div>
-          <div class="stat-row"><span>Zona D</span><span class="v" id="statPunteriaD">0</span></div>
+          <!-- Build .31 — los rótulos son dinámicos: un blanco de referencia
+               puede no tener zonas "A/C/D" (IDPA las llama -0/-1/-3, y en Dot
+               Torture no hay zonas sino impactos), así que updatePunteriaStats()
+               los reescribe y esconde las filas que no apliquen. -->
+          <div class="stat-row" id="statPunteriaARow"><span id="statPunteriaALabel">Zona A</span><span class="v success-txt" id="statPunteriaA">0</span></div>
+          <div class="stat-row" id="statPunteriaCRow"><span id="statPunteriaCLabel">Zona C</span><span class="v" id="statPunteriaC">0</span></div>
+          <div class="stat-row" id="statPunteriaDRow"><span id="statPunteriaDLabel">Zona D</span><span class="v" id="statPunteriaD">0</span></div>
           <div class="stat-row"><span>Fuera del blanco</span><span class="v danger-txt" id="statPunteriaMiss">0</span></div>
+          <!-- Build .31 — solo para blancos de referencia: el total según la
+               tabla de puntaje REAL de ese blanco. Los blancos generados por
+               la app no tienen una, así que esta tarjeta arranca oculta y la
+               prende updatePunteriaStats() cuando corresponde. -->
+          <div class="stat-row" id="statPunteriaPuntosWrap" style="display:none;">
+            <span>Puntaje <span class="sub mono" id="statPunteriaPuntosHint" style="display:block;font-size:11px;"></span></span>
+            <span class="v" id="statPunteriaPuntos">0</span>
+          </div>
+          <div class="stat-row" style="display:none;"><span>Impactos al rehén</span><span class="v danger-txt" id="statPunteriaPenal">0</span></div>
 
           <div>
             <label class="field-label">Registro de series</label>
@@ -509,7 +541,7 @@
   </div>
 
   <div class="footer-note">
-    <span class="pill">build 2026-09-10.30</span>
+    <span class="pill">build 2026-09-10.31</span>
   </div>
 </div>
 
@@ -537,6 +569,7 @@
 <script src="js/constants.js" defer></script>
 <script src="js/storage.js" defer></script>
 <script src="js/target.js" defer></script>
+<script src="js/blancos.js" defer></script>
 <script src="js/safety.js" defer></script>
 <script src="js/vision.js" defer></script>
 <script src="js/drill.js" defer></script>

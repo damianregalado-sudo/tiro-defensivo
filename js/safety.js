@@ -125,6 +125,11 @@ const Safety = (() => {
     $('#safetyModePicker').style.display = 'none';
     $('#safetyTargetPicker').style.display = 'none';
     $('#safetyLibraryPicker').style.display = 'none';
+    // Build .31 — el paso de blancos de referencia es un cuarto estado de
+    // esta misma pantalla, así que tiene que apagarse acá como los otros o
+    // quedaría visible debajo del checklist.
+    const ref = $('#safetyRefPicker');
+    if (ref) ref.style.display = 'none';
     $('#safetyChecklistWrap').style.display = 'none';
   }
 
@@ -144,6 +149,15 @@ const Safety = (() => {
     hideAllSteps();
     $('#safetyLibraryPicker').style.display = '';
     $('#libraryPickerModeLabel').textContent = modeLabel(mode);
+  }
+
+  // Build .31 — igual que showLibraryPicker pero para los blancos de
+  // referencia; el llenado de la grilla también lo hace app.js (necesita
+  // Blancos, que safety.js no conoce).
+  function showRefPicker() {
+    hideAllSteps();
+    $('#safetyRefPicker').style.display = '';
+    $('#refPickerModeLabel').textContent = modeLabel(mode);
   }
 
   function showTargetPicker() {
@@ -200,9 +214,11 @@ const Safety = (() => {
     $('#btnChangeMode').addEventListener('click', changeMode);
     $('#btnChangeModeFromPicker').addEventListener('click', changeMode);
     $('#btnBackToTargetPicker').addEventListener('click', showTargetPicker);
+    const backRef = $('#btnBackToTargetPickerFromRef');
+    if (backRef) backRef.addEventListener('click', showTargetPicker);
     $('#btnArm').addEventListener('click', () => { if (mode) onArmed(mode); });
     $('#btnResetSafety').addEventListener('click', reset);
   }
 
-  return { init, reset, getMode, isModeArmed, showLibraryPicker, showTargetPicker, showChecklistForMode };
+  return { init, reset, getMode, isModeArmed, showLibraryPicker, showRefPicker, showTargetPicker, showChecklistForMode };
 })();

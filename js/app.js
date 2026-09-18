@@ -251,6 +251,88 @@ const App = (() => {
     alert(`Blanco #${decoded.id} importado y guardado en tu biblioteca. Completá el chequeo de seguridad para poder mandarlo a Fuego Seco/Real.`);
   }
 
+  // Build .31 — blancos de referencia. Un blanco de referencia es una hoja
+  // que el tirador imprime aparte (IDPA, IPSC, FBI Qual, BT-5S, Dot Torture,
+  // silueta de cabeza, rehén): la app no la dibuja ni la genera, sólo la
+  // PUNTÚA, usando las zonas ya digitalizadas en js/blancos.js.
+  //
+  // Se representa con el mismo objeto `target` de siempre, con family
+  // 'ipsc', para reusar entero el camino de Puntería que ya existe (el
+  // toggle Reacción/Puntería, el gate de armado, el overlay, el fallback de
+  // toque manual, el historial). Lo único que lo distingue es `refBlanco`,
+  // que es lo que miran Target.drawGrid() y DryFire.registerPunteriaHit()
+  // para dibujar y evaluar contra las zonas REALES de ese blanco en vez de
+  // contra la silueta que genera la app. `shapes: []` es lo mismo que ya
+  // usan los blancos de puntería generados, así que nada que recorra
+  // shapes se rompe.
+  function buildRefTarget(refId) {
+    const b = Blancos.get(refId);
+    if (!b) return null;
+    const m = Safety.getMode() || 'DRY';
+    return {
+      id: randInt(1, 65535),
+      pageSize: 'A4',
+      mode: m,
+      family: 'ipsc',
+      refBlanco: refId,
+      refNombre: b.nombre,
+      distDesigned: 10,
+      distSimulated: 10,
+      shapes: [],
+      qr: false,
+      createdAt: Date.now(),
+    };
+  }
+
+  // Los blancos de referencia NO se guardan en la biblioteca: la biblioteca
+  // es para blancos generados (cada uno con su id impreso en el metatag y su
+  // geometría propia). Un blanco de referencia no tiene nada que guardar —
+  // es siempre el mismo, ya viene con la app — así que se manda directo a
+  // practicar sin pasar por autoSaveTarget().
+  function chooseRefTarget(refId) {
+    const t = buildRefTarget(refId);
+    if (!t) return;
+    setActiveTarget(t);
+    const b = Blancos.get(refId);
+    sendToPractice(t.mode, `${b.nombre} (blanco de referencia)`);
+  }
+
+  function renderRefTargetGrid() {
+    const grid = $('#refTargetGrid');
+    if (!grid || typeof Blancos === 'undefined') return;
+    grid.innerHTML = Blancos.listar().map(b => {
+      // `oficial: false` marca los dos blancos cuya tabla de puntaje
+      // propusimos nosotros (BT-5S y silueta de cabeza) porque no tienen una
+      // publicada. Se dice en la tarjeta a propósito: no queremos que
+      // alguien entrene contra un puntaje inventado creyendo que es la regla
+      // oficial de una disciplina.
+      const sello = b.oficial
+        ? '<span class="pill">puntaje oficial</span>'
+        : '<span class="pill warn">puntaje propuesto</span>';
+      return `<div class="saved-target-card">
+        <img src="${b.imagen}" alt="Hoja del blanco ${b.nombre}" loading="lazy"
+             style="width:100%;border-radius:6px;background:#cfd3d6;" data-ref="${b.id}">
+        <div class="saved-target-name" data-ref="${b.id}">${b.nombre}</div>
+        <div class="sub" style="font-size:12px;margin:4px 0 8px;" data-ref="${b.id}">${b.regla}</div>
+        <div class="btn-row">
+          ${sello}
+          <button class="btn btn-ghost" data-print-ref="${b.id}" style="margin-left:auto;">Imprimir hoja</button>
+        </div>
+      </div>`;
+    }).join('');
+    $$('#refTargetGrid [data-ref]').forEach(c => c.addEventListener('click', () => chooseRefTarget(c.dataset.ref)));
+    // "Imprimir hoja" abre la imagen del blanco en una pestaña nueva para
+    // mandarla a la impresora. stopPropagation() porque el botón vive dentro
+    // de la tarjeta, que al tocarla manda a practicar — mismo cuidado que ya
+    // tienen los botones de eliminar/reimprimir de la grilla de guardados
+    // (ver el test de "no dispara además cargar y practicar").
+    $$('#refTargetGrid [data-print-ref]').forEach(b => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const rec = Blancos.get(b.dataset.printRef);
+      if (rec) window.open(rec.imagen, '_blank');
+    }));
+  }
+
   function loadSavedTarget(id) {
     const rec = Storage.get('tm_saved_targets', []).find(r => r.id === id);
     if (!rec) return;
@@ -580,6 +662,10 @@ const App = (() => {
     $('#pickSavedBtn').addEventListener('click', () => {
       Safety.showLibraryPicker();
       renderHomeSavedGrid();
+    });
+    if ($('#pickRefBtn')) $('#pickRefBtn').addEventListener('click', () => {
+      Safety.showRefPicker();
+      renderRefTargetGrid();
     });
     if ($('#homeSavedSearch')) $('#homeSavedSearch').addEventListener('input', renderHomeSavedGrid);
 
